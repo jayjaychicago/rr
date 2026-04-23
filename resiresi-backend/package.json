@@ -1,0 +1,31 @@
+{
+  "name": "resiresi-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "migrate": "node src/db/migrate.js",
+    "seed": "node src/db/seed.js",
+    "test": "node --test test/smoke.test.js"
+  },
+  "dependencies": {
+    "@axiomhq/pino": "^1.6.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1",
+    "helmet": "^7.1.0",
+    "pg": "^8.12.0",
+    "pino": "^9.3.1",
+    "pino-http": "^10.2.0",
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^10.0.0",
+    "yaml": "^2.4.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "pino-pretty": "^11.2.1"
+  }
+}

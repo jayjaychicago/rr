@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: resiresi
+      POSTGRES_USER: resiresi
+      POSTGRES_PASSWORD: resiresi
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U resiresi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://resiresi:resiresi@db:5432/resiresi
+      NODE_ENV: development
+      PORT: "8080"
+      TRUST_PROXY: "1"
+      PUBLIC_BASE_URL: "http://localhost:8080"
+      LOG_LEVEL: debug
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "node src/db/migrate.js && node src/db/seed.js && node src/server.js"
+
+volumes:
+  pgdata:
