@@ -10,6 +10,7 @@ const router = Router({ mergeParams: true });
 const CreateReservationSchema = z.object({
   table_id: z.string().uuid().optional(),
   diner_user_id: z.string().uuid().optional(),
+  diner_external_id: z.string().max(200).optional(),
   diner_name: z.string().min(1).max(200),
   diner_email: z.string().email().optional(),
   diner_phone: z.string().optional(),
@@ -41,6 +42,7 @@ const ListQuerySchema = z.object({
   to: z.string().datetime({ offset: true }).optional(),
   status: z.union([z.string(), z.array(z.string())]).optional(),
   diner_email: z.string().optional(),
+  diner_external_id: z.string().optional(),
   table_id: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
   cursor: z.string().optional(),
@@ -95,11 +97,12 @@ router.post('/',
       try {
         const { rows } = await pool.query(
           `INSERT INTO reservations
-             (restaurant_id, table_id, diner_user_id, diner_name, diner_email, diner_phone,
+             (restaurant_id, table_id, diner_user_id, diner_external_id, diner_name, diner_email, diner_phone,
               party_size, starts_at, ends_at, status, notes, idempotency_key, created_by_key_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
           [
             restaurantId, d.table_id || null, d.diner_user_id || null,
+            d.diner_external_id || null,
             d.diner_name, d.diner_email || null, d.diner_phone || null,
             d.party_size, d.starts_at, endsAt.toISOString(),
             d.status || 'confirmed', d.notes || null, idempotencyKey,
@@ -140,8 +143,8 @@ router.get('/',
 
       // diner_app can only see own reservations
       if (req.apiKey.role === 'diner_app') {
-        if (!q.diner_email) {
-          return next(Errors.badRequest('diner_email_required', 'diner_app keys must supply ?diner_email='));
+        if (!q.diner_external_id && !q.diner_email) {
+          return next(Errors.badRequest('filter_required', 'diner_app keys must supply ?diner_external_id= or ?diner_email='));
         }
       } else {
         // host/manager/owner/platform
@@ -155,6 +158,7 @@ router.get('/',
 
       if (q.from) { conditions.push(`r.starts_at >= $${p++}`); params.push(q.from); }
       if (q.to)   { conditions.push(`r.starts_at <= $${p++}`); params.push(q.to); }
+      if (q.diner_external_id) { conditions.push(`r.diner_external_id = $${p++}`); params.push(q.diner_external_id); }
       if (q.diner_email) { conditions.push(`r.diner_email = $${p++}`); params.push(q.diner_email); }
       if (q.table_id) { conditions.push(`r.table_id = $${p++}`); params.push(q.table_id); }
 

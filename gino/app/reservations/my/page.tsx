@@ -11,7 +11,8 @@ export default async function MyReservationsPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/auth/signin?callbackUrl=/reservations/my");
 
-  const reservations = await listMyReservations(session.user!.email!);
+  const dinerId = (session as unknown as Record<string, unknown>).dinerId as string;
+  const reservations = await listMyReservations(dinerId);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-16">

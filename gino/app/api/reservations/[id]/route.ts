@@ -17,11 +17,13 @@ export async function DELETE(
   const cookieStore = cookies();
   const config = parseConfig(
     cookieStore.get(COOKIE_NAME)?.value,
-    process.env.RESIRESI_API_KEY!
+    process.env.RESIRESI_API_KEY!,
+    process.env.RESTAURANT_API_KEY!
   );
   const oauthToken = (session as unknown as Record<string, unknown>).accessToken as string | undefined;
+  const dinerId = (session as unknown as Record<string, unknown>).dinerId as string;
 
-  const mine = await listMyReservations(session.user.email, config, oauthToken);
+  const mine = await listMyReservations(dinerId, config, oauthToken);
   if (!mine.find((r) => r.id === params.id)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

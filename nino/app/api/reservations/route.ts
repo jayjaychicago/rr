@@ -13,9 +13,11 @@ export async function POST(req: NextRequest) {
   const cookieStore = cookies();
   const config = parseConfig(
     cookieStore.get(COOKIE_NAME)?.value,
-    process.env.RESIRESI_API_KEY!
+    process.env.RESIRESI_API_KEY!,
+    process.env.RESTAURANT_API_KEY!
   );
   const oauthToken = (session as unknown as Record<string, unknown>).accessToken as string | undefined;
+  const dinerId = (session as unknown as Record<string, unknown>).dinerId as string;
 
   const { party_size, starts_at, duration_minutes, notes, phone } = await req.json();
   if (!party_size || !starts_at) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -23,8 +25,8 @@ export async function POST(req: NextRequest) {
   try {
     const reservation = await createReservation(
       {
+        diner_external_id: dinerId,
         diner_name: session.user.name ?? session.user.email,
-        diner_email: session.user.email,
         diner_phone: phone || undefined,
         party_size: Number(party_size),
         starts_at,

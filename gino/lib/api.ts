@@ -1,5 +1,6 @@
 import type { ApiBlazeConfig } from "./apiblaze";
 
+// Resiresi (shared reservation backend)
 const ORIGINAL_BASE = `${process.env.RESIRESI_API_URL!}/v1`;
 const PROXY_BASE = "https://rr-gino.apiblaze.com/1.0.0";
 const DEFAULT_API_KEY = process.env.RESIRESI_API_KEY!;
@@ -19,17 +20,21 @@ export interface Reservation {
   created_at: string;
 }
 
+export interface Profile {
+  diner_external_id: string;
+  name: string | null;
+  phone: string | null;
+  dietary_notes: string | null;
+  marketing_opt_in: boolean;
+}
+
 function buildAuthHeaders(
   config: ApiBlazeConfig | undefined,
   oauthToken: string | undefined
 ): Record<string, string> {
   const mode = config?.authMode ?? "apikey";
-  if (mode === "oauth" && oauthToken) {
-    return { Authorization: `Bearer ${oauthToken}` };
-  }
-  if (mode === "passthru") {
-    return {};
-  }
+  if (mode === "oauth" && oauthToken) return { Authorization: `Bearer ${oauthToken}` };
+  if (mode === "passthru") return {};
   return { "x-api-key": config?.apiKey ?? DEFAULT_API_KEY };
 }
 
@@ -45,15 +50,9 @@ async function apiFetch(
   for (const h of config?.customHeaders ?? []) {
     if (h.name) customHeaders[h.name] = h.value;
   }
-
   const res = await fetch(`${base}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders,
-      ...customHeaders,
-      ...init?.headers,
-    },
+    headers: { "Content-Type": "application/json", ...authHeaders, ...customHeaders, ...init?.headers },
     cache: "no-store",
   });
   const body = await res.json();
@@ -67,8 +66,9 @@ async function apiFetch(
 
 export async function createReservation(
   data: {
+    diner_external_id: string;
     diner_name: string;
-    diner_email: string;
+    diner_email?: string;
     diner_phone?: string;
     party_size: number;
     starts_at: string;
@@ -92,12 +92,12 @@ export async function createReservation(
 }
 
 export async function listMyReservations(
-  email: string,
+  dinerId: string,
   config?: ApiBlazeConfig,
   oauthToken?: string
 ): Promise<Reservation[]> {
   const data = await apiFetch(
-    `/restaurants/${RESTAURANT_ID}/reservations?diner_email=${encodeURIComponent(email)}&limit=50`,
+    `/restaurants/${RESTAURANT_ID}/reservations?diner_external_id=${encodeURIComponent(dinerId)}&limit=50`,
     undefined,
     config,
     oauthToken

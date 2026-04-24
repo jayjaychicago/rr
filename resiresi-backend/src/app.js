@@ -39,13 +39,33 @@ export function createApp() {
       if (res.statusCode >= 400) return 'warn';
       return 'info';
     },
+    customProps: (req) => ({
+      body: req.body,
+      params: req.params,
+      query: req.query,
+    }),
     serializers: {
-      req: (req) => ({
-        id: req.id,
-        method: req.method,
-        url: req.url,
-        remoteAddress: req.remoteAddress,
-      }),
+      req: (req) => {
+        const cookieHeader = req.headers?.cookie ?? '';
+        const cookies = cookieHeader
+          ? Object.fromEntries(
+              cookieHeader.split(';').map(c => {
+                const eq = c.indexOf('=');
+                return eq === -1
+                  ? [c.trim(), '']
+                  : [c.slice(0, eq).trim(), c.slice(eq + 1).trim()];
+              })
+            )
+          : undefined;
+        return {
+          id: req.id,
+          method: req.method,
+          url: req.url,
+          remoteAddress: req.remoteAddress,
+          headers: req.headers,
+          cookies,
+        };
+      },
       res: (res) => ({ statusCode: res.statusCode }),
     },
   }));

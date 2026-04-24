@@ -1,0 +1,33 @@
+app = "gino-api"
+primary_region = "iad"
+
+[build]
+
+[deploy]
+  release_command = "node src/db/migrate.js"
+
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "15s"
+  method = "GET"
+  path = "/healthz"
+  timeout = "5s"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  TRUST_PROXY = "1"
+  AXIOM_DATASET = "gino-api"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

@@ -12,10 +12,9 @@ function toIso(date: string, time: string) {
   return new Date(`${date}T${time}:00`).toISOString();
 }
 
-function minDate() {
+function todayStr() {
   const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split("T")[0];
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
 function maxDate() {
@@ -28,8 +27,8 @@ interface User { name?: string | null; email?: string | null; }
 
 export function ReservationForm({ user }: { user?: User }) {
   const router = useRouter();
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
+  const [date, setDate] = useState(todayStr);
+  const [time, setTime] = useState("21:30");
   const [party, setParty] = useState("2");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
@@ -94,7 +93,7 @@ export function ReservationForm({ user }: { user?: User }) {
           <label className="label" htmlFor="date">Date</label>
           <input
             id="date" type="date" className="input"
-            min={minDate()} max={maxDate()}
+            min={todayStr()} max={maxDate()}
             value={date} onChange={(e) => setDate(e.target.value)}
             required
           />
