@@ -1,0 +1,7 @@
+# --- study protection: never track or clean these ---
+.vercel/
+.env*.local
+*.env.production.local
+# Keeps the baseline lean and stops `git clean` from forcing a reinstall.
+# (node_modules already committed in some apps stays tracked; that's harmless.)
+node_modules/

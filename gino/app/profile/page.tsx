@@ -1,25 +1,24 @@
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { authOptions } from "@/lib/auth";
+import { getUser, getDinerId } from "@/lib/session";
 import { getProfileFromDb } from "@/lib/profile";
 import { parseConfig, COOKIE_NAME } from "@/lib/apiblaze";
 import { ProfileForm } from "@/components/ProfileForm";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "My Profile" };
+export const dynamic = "force-dynamic";
 
 const OWN_PROXY_URL = "https://gino-api.apiblaze.com";
 
 export default async function ProfilePage() {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/auth/signin?callbackUrl=/profile");
+  const user = getUser();
+  if (!user) redirect("/auth/signin?callbackUrl=/profile");
 
-  const s = session as unknown as Record<string, unknown>;
-  const dinerId = s.dinerId as string;
+  const dinerId = getDinerId(user);
 
   const cookieStore = cookies();
-  const config = parseConfig(cookieStore.get(COOKIE_NAME)?.value, process.env.RESIRESI_API_KEY!);
+  const config = parseConfig(cookieStore.get(COOKIE_NAME)?.value);
   const apiBaseUrl = config.ownBackend === "proxy" ? OWN_PROXY_URL : "";
 
   let profile = null;
@@ -32,7 +31,7 @@ export default async function ProfilePage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-16">
       <h1 className="font-serif text-4xl font-bold mb-2">My Profile</h1>
-      <p className="text-stone-500 mb-10">{session.user?.email}</p>
+      <p className="text-stone-500 mb-10">{user.email}</p>
       <ProfileForm initialData={profile} apiBaseUrl={apiBaseUrl} />
     </div>
   );

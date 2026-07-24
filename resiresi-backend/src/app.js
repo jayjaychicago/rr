@@ -11,7 +11,6 @@ import systemRouter from './routes/system.js';
 import restaurantsRouter from './routes/restaurants.js';
 import tablesRouter from './routes/tables.js';
 import reservationsRouter from './routes/reservations.js';
-import { restaurantRouter as apiKeysRouter, platformRouter as platformApiKeysRouter } from './routes/apiKeys.js';
 
 export function createApp() {
   const app = express();
@@ -83,8 +82,6 @@ export function createApp() {
   app.use('/v1/restaurants', restaurantsRouter);
   app.use('/v1/restaurants/:restaurantId/tables', tablesRouter);
   app.use('/v1/restaurants/:restaurantId/reservations', reservationsRouter);
-  app.use('/v1/restaurants/:restaurantId/api-keys', apiKeysRouter);
-  app.use('/v1/platform/api-keys', platformApiKeysRouter);
 
   // 8. 404
   app.use((req, res) => {

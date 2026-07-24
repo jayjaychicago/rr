@@ -19,7 +19,7 @@ export const COOKIE_NAME = "apiblaze";
 
 export function parseConfig(
   cookieValue: string | undefined,
-  defaultApiKey: string,
+  defaultApiKey = "",
   defaultOwnApiKey = ""
 ): ApiBlazeConfig {
   const def: ApiBlazeConfig = {

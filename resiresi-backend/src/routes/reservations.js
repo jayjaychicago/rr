@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import pool from '../db/pool.js';
-import { requireApiKey, requireRole, requireRestaurantScope } from '../middleware/auth.js';
+import { resolveRestaurant } from '../middleware/restaurant.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import { Errors } from '../lib/errors.js';
 
 const router = Router({ mergeParams: true });
+
+// Accepts a slug or a UUID in the path; hands handlers a UUID.
+router.use(resolveRestaurant);
 
 const CreateReservationSchema = z.object({
   table_id: z.string().uuid().optional(),
@@ -50,13 +53,10 @@ const ListQuerySchema = z.object({
 
 // POST /v1/restaurants/:restaurantId/reservations
 router.post('/',
-  requireApiKey,
-  requireRestaurantScope('restaurantId'),
-  requireRole('diner_app', 'host', 'manager', 'owner'),
   validate(CreateReservationSchema),
   async (req, res, next) => {
     try {
-      const { restaurantId } = req.params;
+      const restaurantId = req.restaurantId;
       const idempotencyKey = req.headers['idempotency-key'] || null;
 
       // Handle idempotency replay
@@ -98,15 +98,14 @@ router.post('/',
         const { rows } = await pool.query(
           `INSERT INTO reservations
              (restaurant_id, table_id, diner_user_id, diner_external_id, diner_name, diner_email, diner_phone,
-              party_size, starts_at, ends_at, status, notes, idempotency_key, created_by_key_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+              party_size, starts_at, ends_at, status, notes, idempotency_key)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
           [
             restaurantId, d.table_id || null, d.diner_user_id || null,
             d.diner_external_id || null,
             d.diner_name, d.diner_email || null, d.diner_phone || null,
             d.party_size, d.starts_at, endsAt.toISOString(),
             d.status || 'confirmed', d.notes || null, idempotencyKey,
-            req.apiKey.id,
           ]
         );
         res.status(201).json(rows[0]);
@@ -133,24 +132,11 @@ router.post('/',
 
 // GET /v1/restaurants/:restaurantId/reservations
 router.get('/',
-  requireApiKey,
-  requireRestaurantScope('restaurantId'),
   validateQuery(ListQuerySchema),
   async (req, res, next) => {
     try {
-      const { restaurantId } = req.params;
+      const restaurantId = req.restaurantId;
       const q = req.validatedQuery;
-
-      // diner_app can only see own reservations
-      if (req.apiKey.role === 'diner_app') {
-        if (!q.diner_external_id && !q.diner_email) {
-          return next(Errors.badRequest('filter_required', 'diner_app keys must supply ?diner_external_id= or ?diner_email='));
-        }
-      } else {
-        // host/manager/owner/platform
-        const allowed = ['host','manager','owner','platform'];
-        if (!allowed.includes(req.apiKey.role)) return next(Errors.forbidden());
-      }
 
       const conditions = ['r.restaurant_id = $1'];
       const params = [restaurantId];
@@ -206,27 +192,16 @@ router.get('/',
 
 // GET /v1/restaurants/:restaurantId/reservations/:reservationId
 router.get('/:reservationId',
-  requireApiKey,
-  requireRestaurantScope('restaurantId'),
   async (req, res, next) => {
     try {
-      const { restaurantId, reservationId } = req.params;
+      const restaurantId = req.restaurantId;
+      const { reservationId } = req.params;
       const { rows } = await pool.query(
         'SELECT * FROM reservations WHERE id = $1 AND restaurant_id = $2',
         [reservationId, restaurantId]
       );
       if (rows.length === 0) return next(Errors.notFound('Reservation'));
-      const reservation = rows[0];
-
-      // diner_app can only see own reservations
-      if (req.apiKey.role === 'diner_app') {
-        // We don't have diner identity on the key — allow if diner_email matches query
-        // The spec says "own only"; for key-based auth we can't verify identity further
-        // without a diner_user_id match; return 403 for now unless it's a platform check
-        return next(Errors.forbidden());
-      }
-
-      res.json(reservation);
+      res.json(rows[0]);
     } catch (err) {
       next(err);
     }
@@ -235,20 +210,12 @@ router.get('/:reservationId',
 
 // PATCH /v1/restaurants/:restaurantId/reservations/:reservationId
 router.patch('/:reservationId',
-  requireApiKey,
-  requireRestaurantScope('restaurantId'),
   validate(UpdateReservationSchema),
   async (req, res, next) => {
     try {
-      const { restaurantId, reservationId } = req.params;
+      const restaurantId = req.restaurantId;
+      const { reservationId } = req.params;
       const fields = req.validated;
-
-      // diner_app can only set cancelled on own reservation
-      if (req.apiKey.role === 'diner_app') {
-        const allowed = Object.keys(fields).every(k => k === 'status' && fields[k] === 'cancelled');
-        if (!allowed) return next(Errors.forbidden());
-      }
-
       const keys = Object.keys(fields);
       if (keys.length === 0) {
         const { rows } = await pool.query(
@@ -295,23 +262,16 @@ router.patch('/:reservationId',
 
 // DELETE /v1/restaurants/:restaurantId/reservations/:reservationId (soft cancel)
 router.delete('/:reservationId',
-  requireApiKey,
-  requireRestaurantScope('restaurantId'),
   async (req, res, next) => {
     try {
-      const { restaurantId, reservationId } = req.params;
+      const restaurantId = req.restaurantId;
+      const { reservationId } = req.params;
 
       const { rows } = await pool.query(
         'SELECT * FROM reservations WHERE id = $1 AND restaurant_id = $2',
         [reservationId, restaurantId]
       );
       if (rows.length === 0) return next(Errors.notFound('Reservation'));
-
-      // diner_app can only cancel own
-      if (req.apiKey.role === 'diner_app') {
-        // Without diner_user_id binding, we can't verify ownership — deny
-        return next(Errors.forbidden());
-      }
 
       await pool.query(
         "UPDATE reservations SET status = 'cancelled' WHERE id = $1 AND restaurant_id = $2",

@@ -1,10 +1,14 @@
 "use client";
 import Link from "next/link";
-import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
 
-export function Nav() {
-  const { data: session } = useSession();
+export function Nav({
+  signedIn,
+  signOutAction,
+}: {
+  signedIn: boolean;
+  signOutAction: () => Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -18,11 +22,13 @@ export function Nav() {
           <Link href="/#menu" className="text-sm font-medium text-stone-600 hover:text-brand-700 transition">Menu</Link>
           <Link href="/#about" className="text-sm font-medium text-stone-600 hover:text-brand-700 transition">About</Link>
           <Link href="/#contact" className="text-sm font-medium text-stone-600 hover:text-brand-700 transition">Contact</Link>
-          {session && (
+          {signedIn && (
             <>
               <Link href="/reservations/my" className="text-sm font-medium text-stone-600 hover:text-brand-700 transition">My Reservations</Link>
               <Link href="/profile" className="text-sm font-medium text-stone-600 hover:text-brand-700 transition">Profile</Link>
-              <button onClick={() => signOut({ callbackUrl: "/" })} className="btn-outline text-xs px-4 py-2">Sign out</button>
+              <form action={signOutAction}>
+                <button type="submit" className="btn-outline text-xs px-4 py-2">Sign out</button>
+              </form>
             </>
           )}
           <Link href="/reservations" className="btn-primary text-xs px-4 py-2">Book a Table</Link>
@@ -39,11 +45,13 @@ export function Nav() {
           <Link href="/#menu" className="block py-2 text-sm font-medium" onClick={() => setOpen(false)}>Menu</Link>
           <Link href="/#about" className="block py-2 text-sm font-medium" onClick={() => setOpen(false)}>About</Link>
           <Link href="/#contact" className="block py-2 text-sm font-medium" onClick={() => setOpen(false)}>Contact</Link>
-          {session && (
+          {signedIn && (
             <>
               <Link href="/reservations/my" className="block py-2 text-sm font-medium" onClick={() => setOpen(false)}>My Reservations</Link>
               <Link href="/profile" className="block py-2 text-sm font-medium" onClick={() => setOpen(false)}>Profile</Link>
-              <button onClick={() => signOut({ callbackUrl: "/" })} className="block py-2 text-sm font-medium text-brand-700">Sign out</button>
+              <form action={signOutAction}>
+                <button type="submit" className="block py-2 text-sm font-medium text-brand-700">Sign out</button>
+              </form>
             </>
           )}
           <Link href="/reservations" className="btn-primary block text-center mt-2" onClick={() => setOpen(false)}>Book a Table</Link>

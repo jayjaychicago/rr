@@ -37,11 +37,17 @@ test('GET /docs returns 200 HTML', async () => {
   assert.ok(res.headers.get('content-type').includes('html'));
 });
 
-test('GET /v1/restaurants without auth returns 401', async () => {
+test('GET /v1/restaurants needs no credential', async () => {
   const res = await fetch(`${baseUrl}/v1/restaurants`);
-  assert.equal(res.status, 401);
-  const body = await res.json();
-  assert.equal(body.error.code, 'unauthorized');
+  // 200 with a live DB, 500 without one — never 401/403: this origin is open.
+  assert.ok([200, 500].includes(res.status), `Expected 200 or 500, got ${res.status}`);
+});
+
+test('key-management routes no longer exist', async () => {
+  for (const path of ['/v1/restaurants/any/api-keys', '/v1/platform/api-keys']) {
+    const res = await fetch(`${baseUrl}${path}`);
+    assert.equal(res.status, 404, `${path} should be gone`);
+  }
 });
 
 test('unknown route returns 404', async () => {

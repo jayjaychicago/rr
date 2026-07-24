@@ -27,11 +27,9 @@ Tables (all UUIDs unless noted):
 
 - **restaurants** — `id`, `slug` (unique, lowercase kebab), `name`, `timezone` (IANA, default `America/Detroit`), `open_hours` (jsonb array of `{day_of_week:0-6, open:"HH:MM", close:"HH:MM"}`), `address`, `phone`, `created_at`, `updated_at`
 - **users** — `id`, `email` (citext, unique when non-null), `phone`, `display_name`, timestamps
-- **restaurant_memberships** — `id`, `restaurant_id`, `user_id`, `role` enum `('host','manager','owner')`, unique on `(restaurant_id, user_id)`
 - **dining_tables** — `id`, `restaurant_id`, `label`, `capacity` (>0), `active` bool, unique on `(restaurant_id, label)`
-- **api_keys** — `id`, `restaurant_id` (nullable — null only when `role='platform'`), `name`, `prefix` (unique, plaintext, shown in UI), `secret_hash` (sha256 hex of full key string), `role` enum `('platform','owner','manager','host','diner_app')`, `created_by`, `last_used_at`, `expires_at`, `revoked_at`, `created_at`. CHECK: platform keys have null restaurant, others have non-null.
-- **reservations** — `id`, `restaurant_id`, `table_id` (nullable), `diner_user_id` (nullable), denormalized `diner_name`/`diner_email`/`diner_phone`, `party_size` (1–50), `starts_at`, `ends_at` (CHECK `ends_at > starts_at`), `status` enum `('pending','confirmed','seated','completed','cancelled','no_show')` default `'confirmed'`, `notes`, `idempotency_key` (nullable), `created_by_key_id`, timestamps
-- **audit_events** — bigserial id, `restaurant_id`, `actor_key_id`, `actor_user_id`, `action`, `target_type`, `target_id`, `metadata` jsonb, `created_at`
+- **reservations** — `id`, `restaurant_id`, `table_id` (nullable), `diner_user_id` (nullable), denormalized `diner_name`/`diner_email`/`diner_phone`, `party_size` (1–50), `starts_at`, `ends_at` (CHECK `ends_at > starts_at`), `status` enum `('pending','confirmed','seated','completed','cancelled','no_show')` default `'confirmed'`, `notes`, `idempotency_key` (nullable), timestamps
+- **audit_events** — bigserial id, `restaurant_id`, `actor_user_id`, `action`, `target_type`, `target_id`, `metadata` jsonb, `created_at`
 
 Constraints:
 
@@ -44,36 +42,21 @@ Migrations live in `db/migrations/NNN_*.sql` and are applied by a runner (`src/d
 
 ---
 
-## 3. API key format
+## 3. Authentication
 
-- Full key string: `rsrsi_<env>_<6char>.<32-byte base64url secret>` — e.g., `rsrsi_live_A7K2XQ.Zk9s...`
-- Store `prefix` (everything before the dot) plaintext for lookup and display. Store `sha256(full_key_string)` in `secret_hash`.
-- Character set for the 6-char tail excludes `0/O/1/I/l` for readability.
-- Timing-safe hash comparison (`crypto.timingSafeEqual` over hex buffers).
-- Accept the key in either `Authorization: Bearer …` or `x-api-key: …`.
-- On every successful auth, fire-and-forget `UPDATE api_keys SET last_used_at = now()` (do not block the request).
+**There is none.** This origin is open: no API keys, no roles, no auth middleware.
+Every endpoint is callable without a credential.
+
+Access control is the job of the gateway placed in front of this service. Do not
+add keys or roles back into the origin — that is the whole point of the fixture.
 
 ---
 
-## 4. Auth & role matrix
+## 4. Access rules
 
-Two middlewares: `requireApiKey`, `requireRole(...roles)`, plus `requireRestaurantScope('restaurantId')` which enforces that the key's `restaurant_id` matches the path parameter (platform keys bypass).
-
-| Action                                       | diner_app | host | manager | owner | platform |
-|---                                           |---        |---   |---      |---    |---       |
-| Create restaurant                            | —         | —    | —       | —     | ✓        |
-| Read own restaurant                          | ✓         | ✓    | ✓       | ✓     | ✓        |
-| Update restaurant                            | —         | —    | ✓       | ✓     | ✓        |
-| Manage tables (create/update/delete)         | —         | —    | ✓       | ✓     | ✓        |
-| Create reservation                           | ✓         | ✓    | ✓       | ✓     | ✓        |
-| List all reservations in restaurant          | —         | ✓    | ✓       | ✓     | ✓        |
-| List own reservations (diner_app)            | ✓ (own only, `?diner_email=` required) | — | — | — | — |
-| Read single reservation                      | ✓ own only | ✓    | ✓       | ✓     | ✓        |
-| Assign table / change status                 | diner_app can only set `cancelled` on own | ✓ | ✓ | ✓ | ✓ |
-| Cancel reservation                           | ✓ own only | ✓    | ✓       | ✓     | ✓        |
-| Manage API keys                              | —         | —    | —       | ✓ (restaurant-scoped) | ✓ (all) |
-
-Platform keys bypass `requireRole` and `requireRestaurantScope` checks automatically.
+None to enforce. Requests are scoped only by the path they address: a call to
+`/v1/restaurants/{id}/reservations` returns that restaurant's reservations.
+There is no caller identity, so there is nothing to check it against.
 
 ---
 
@@ -87,16 +70,16 @@ Mount everything under `/v1`. JSON everywhere. No trailing slashes.
 - `GET /docs` — Swagger UI. No auth.
 
 **Restaurants**
-- `GET    /v1/restaurants` — platform sees all, scoped keys see just theirs
+- `GET    /v1/restaurants` — returns every restaurant
 - `GET    /v1/restaurants/:idOrSlug`
-- `POST   /v1/restaurants` (platform)
-- `PATCH  /v1/restaurants/:restaurantId` (owner/manager)
+- `POST   /v1/restaurants`
+- `PATCH  /v1/restaurants/:restaurantId`
 
 **Tables**
 - `GET    /v1/restaurants/:restaurantId/tables`
-- `POST   /v1/restaurants/:restaurantId/tables` (owner/manager)
-- `PATCH  /v1/restaurants/:restaurantId/tables/:tableId` (owner/manager)
-- `DELETE /v1/restaurants/:restaurantId/tables/:tableId` (owner/manager)
+- `POST   /v1/restaurants/:restaurantId/tables`
+- `PATCH  /v1/restaurants/:restaurantId/tables/:tableId`
+- `DELETE /v1/restaurants/:restaurantId/tables/:tableId`
 
 **Reservations**
 - `POST   /v1/restaurants/:restaurantId/reservations` — supports `Idempotency-Key` header. Body accepts either `ends_at` or `duration_minutes` (default 90). Validates table belongs to restaurant and capacity ≥ party_size.
@@ -105,12 +88,11 @@ Mount everything under `/v1`. JSON everywhere. No trailing slashes.
 - `PATCH  /v1/restaurants/:restaurantId/reservations/:reservationId`
 - `DELETE /v1/restaurants/:restaurantId/reservations/:reservationId` — soft cancel (sets `status='cancelled'`, returns 204)
 
-**API keys**
-- `GET    /v1/restaurants/:restaurantId/api-keys` (owner)
-- `POST   /v1/restaurants/:restaurantId/api-keys` (owner) — returns `plaintext` **once**; never again
-- `DELETE /v1/restaurants/:restaurantId/api-keys/:keyId` (owner) — sets `revoked_at`, does not hard-delete
+**Addressing a restaurant.** Anywhere `:restaurantId` appears — including the nested
+`/tables` and `/reservations` routes — it may be the **slug** (`nino`, `gino`) or the
+UUID. A `resolveRestaurant` middleware turns either into a UUID before the handler
+runs; an unknown reference is a 404, never a 500.
 
-Platform-wide key management lives at `/v1/platform/api-keys` and requires a platform key.
 
 ---
 
@@ -129,7 +111,7 @@ Platform-wide key management lives at `/v1/platform/api-keys` and requires a pla
   }
   ```
 - Every response carries `x-request-id` (generate if incoming is absent — use `uuid.v4`).
-- Use the status codes you'd expect: 400 validation, 401 missing/bad key, 403 role/tenant mismatch, 404 not found, 409 conflicts (slug taken, table_conflict, table_label_taken), 422 semantic (e.g., table_too_small — actually use 400 with distinct `code` to keep it simple).
+- Use the status codes you'd expect: 400 validation, 404 not found, 409 conflicts (slug taken, table_conflict, table_label_taken), 422 semantic (e.g., table_too_small — actually use 400 with distinct `code` to keep it simple). There is no 401/403 — the origin has no auth.
 - Timestamps are ISO 8601 with offset.
 
 ---
@@ -154,16 +136,13 @@ Platform-wide key management lives at `/v1/platform/api-keys` and requires a pla
 
 `npm run seed` creates:
 
-- 3 restaurants: `le-bernardin` (America/New_York), `joe-pizza` (America/New_York), `zingerman-roadhouse` (America/Detroit). Realistic open_hours.
+- 5 restaurants: `nino` (Nino's Pizza) and `gino` (Gino's Pizza) — the two tenants the demo
+  storefronts point at — plus `le-bernardin`, `joe-pizza` (America/New_York) and
+  `zingerman-roadhouse` (America/Detroit). Realistic open_hours.
 - 6–10 tables per restaurant, mixed capacities (2/2/4/4/4/6/8).
-- For each restaurant: one `owner` key, one `manager` key, one `host` key, one `diner_app` key. Print all plaintext keys to stdout at the end, once. Format:
-  ```
-  le-bernardin (owner):     rsrsi_live_A7K2XQ.Zk9s...
-  ```
-- One platform key at the top.
 - ~30 reservations spread across the next 14 days, mix of statuses.
 
-Seed is idempotent: re-running upserts by slug/label/name and regenerates only missing keys.
+Seed is idempotent: re-running upserts by slug/label/name.
 
 ---
 
@@ -171,8 +150,7 @@ Seed is idempotent: re-running upserts by slug/label/name and regenerates only m
 
 - Written by hand in `openapi.yaml` (not generated from code — we want it to be the source of truth for APIblaze import).
 - `servers:` includes `https://backend.resiresi.com/v1` and `http://localhost:8080/v1`.
-- `securitySchemes`: `ApiKeyAuth` (apiKey, header `x-api-key`) and `BearerAuth` (http bearer). `security` applied globally, overridden to `[]` on `/healthz`.
-- Document every endpoint, every 4xx/409 case, and the `Idempotency-Key` header on reservation create.
+- Document every endpoint, every 4xx/409 case, and the `Idempotency-Key` header on reservation create. No `security` or `securitySchemes` — the origin is open.
 - Swagger UI at `/docs` reads from `/openapi.yaml`.
 
 ---
@@ -225,7 +203,7 @@ fly postgres attach resiresi-db --app resiresi-backend   # sets DATABASE_URL
 # deploy
 fly deploy
 
-# seed (one-time; will print plaintext keys)
+# seed (one-time)
 fly ssh console --app resiresi-backend -C "node src/db/seed.js"
 
 # custom domain
@@ -263,17 +241,14 @@ resiresi-backend/
 │  ├─ lib/
 │  │  ├─ logger.js
 │  │  ├─ errors.js
-│  │  ├─ apikey.js
 │  │  └─ requestId.js
 │  ├─ middleware/
-│  │  ├─ auth.js
 │  │  └─ validate.js
 │  └─ routes/
 │     ├─ system.js           # healthz, openapi, docs
 │     ├─ restaurants.js
 │     ├─ tables.js
-│     ├─ reservations.js
-│     └─ apiKeys.js
+│     └─ reservations.js
 └─ test/
    └─ smoke.test.js          # node:test; hits app factory with supertest-style fetch
 ```
@@ -288,7 +263,6 @@ resiresi-backend/
 - **Error code `23P01`** is the GIST exclusion violation — that's the double-booking path. Error code `23505` on the idempotency unique index means a parallel create with the same key landed first; refetch the existing row and return it with `Idempotent-Replay: true`.
 - **Idempotency replay** for reservation create: if a row already exists for `(restaurant_id, idempotency_key)`, return it with `200` (not 201) and the header `Idempotent-Replay: true`.
 - **Do not** log request bodies wholesale. Pino's redaction handles auth headers; don't accidentally log `req.body` at info level.
-- **Do not** include `plaintext` in any API key response except the one-time `POST /api-keys` response.
 - **OpenAPI must be hand-written** and must validate. Include a `components/schemas` section with every response shape referenced by `$ref`.
 
 ---
@@ -301,7 +275,6 @@ resiresi-backend/
 4. `curl http://localhost:8080/docs` renders Swagger UI.
 5. `fly deploy` succeeds from a clean Fly app and the release command runs migrations.
 6. After `fly certs create backend.resiresi.com`, `https://backend.resiresi.com/healthz` returns 200.
-7. Seed script prints all plaintext API keys once at the end.
-8. A concrete `curl` double-booking test in `DEPLOY.md` produces a 409 `table_conflict`.
+7. A concrete `curl` double-booking test in `DEPLOY.md` produces a 409 `table_conflict`.
 
 Build it. Don't ask clarifying questions unless something in this spec actually contradicts itself. You have access to the flyctl

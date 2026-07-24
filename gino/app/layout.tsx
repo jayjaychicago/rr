@@ -3,6 +3,8 @@ import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { Nav } from "@/components/Nav";
 import { Footer } from "@/components/Footer";
+import { getUser } from "@/lib/session";
+import { signOutUser } from "./auth/actions";
 
 export const metadata: Metadata = {
   title: { default: "GINO", template: "%s | Gino's Pizza" },
@@ -22,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="flex min-h-screen flex-col">
         <Providers>
-          <Nav />
+          <Nav signedIn={!!getUser()} signOutAction={signOutUser} />
           <main className="flex-1">{children}</main>
           <Footer />
         </Providers>

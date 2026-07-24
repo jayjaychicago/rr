@@ -2,8 +2,11 @@ import type { ApiBlazeConfig } from "./apiblaze";
 
 // Resiresi (shared reservation backend)
 const ORIGINAL_BASE = `${process.env.RESIRESI_API_URL!}/v1`;
+// Optional: an APIblaze DP key. Set when RESIRESI_API_URL points at the proxy —
+// the key says which APP is calling; X-End-User-Id (below) says which PERSON.
+const ENV_API_KEY = process.env.RESIRESI_API_KEY;
 const PROXY_BASE = "https://rr-nino.apiblaze.com/1.0.0/prod";
-const DEFAULT_API_KEY = process.env.RESIRESI_API_KEY!;
+// Accepts the restaurant slug ("nino") or its UUID — the API resolves either.
 export const RESTAURANT_ID = process.env.RESIRESI_RESTAURANT_ID!;
 
 export interface Reservation {
@@ -35,14 +38,18 @@ function buildAuthHeaders(
   const mode = config?.authMode ?? "apikey";
   if (mode === "oauth" && oauthToken) return { Authorization: `Bearer ${oauthToken}` };
   if (mode === "passthru") return {};
-  return { "x-api-key": config?.apiKey ?? DEFAULT_API_KEY };
+  // The resiresi origin is open. A key is sent only when one is configured —
+  // from the apiblaze panel cookie, or the RESIRESI_API_KEY env (proxy mode).
+  const key = config?.apiKey || ENV_API_KEY;
+  return key ? { "x-api-key": key } : {};
 }
 
 async function apiFetch(
   path: string,
   init?: RequestInit,
   config?: ApiBlazeConfig,
-  oauthToken?: string
+  oauthToken?: string,
+  endUserId?: string
 ) {
   const base = config?.backend === "proxy" ? PROXY_BASE : ORIGINAL_BASE;
   const authHeaders = buildAuthHeaders(config, oauthToken);
@@ -50,9 +57,15 @@ async function apiFetch(
   for (const h of config?.customHeaders ?? []) {
     if (h.name) customHeaders[h.name] = h.value;
   }
+  // Attribution is a request property, never the credential's: the shared API
+  // key says which APP is calling; X-End-User-Id says which PERSON it acts for.
+  // The gateway resolves groups/limits per end-user from this assertion.
+  const identityHeaders: Record<string, string> = endUserId
+    ? { "X-End-User-Id": endUserId }
+    : {};
   const res = await fetch(`${base}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...authHeaders, ...customHeaders, ...init?.headers },
+    headers: { "Content-Type": "application/json", ...authHeaders, ...customHeaders, ...identityHeaders, ...init?.headers },
     cache: "no-store",
   });
   const body = await res.json();
@@ -87,7 +100,8 @@ export async function createReservation(
       headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {},
     },
     config,
-    oauthToken
+    oauthToken,
+    data.diner_external_id
   ) as Promise<Reservation>;
 }
 
@@ -100,7 +114,8 @@ export async function listMyReservations(
     `/restaurants/${RESTAURANT_ID}/reservations?diner_external_id=${encodeURIComponent(dinerId)}&limit=50`,
     undefined,
     config,
-    oauthToken
+    oauthToken,
+    dinerId
   );
   return data.data as Reservation[];
 }
@@ -108,12 +123,14 @@ export async function listMyReservations(
 export async function cancelReservation(
   reservationId: string,
   config?: ApiBlazeConfig,
-  oauthToken?: string
+  oauthToken?: string,
+  dinerId?: string
 ) {
   return apiFetch(
     `/restaurants/${RESTAURANT_ID}/reservations/${reservationId}`,
     { method: "DELETE" },
     config,
-    oauthToken
+    oauthToken,
+    dinerId
   );
 }

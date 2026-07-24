@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import pool from '../db/pool.js';
-import { requireApiKey, requireRole, requireRestaurantScope } from '../middleware/auth.js';
+import { resolveRestaurant } from '../middleware/restaurant.js';
 import { validate } from '../middleware/validate.js';
 import { Errors } from '../lib/errors.js';
 
 const router = Router({ mergeParams: true });
+
+// Accepts a slug or a UUID in the path; hands handlers a UUID.
+router.use(resolveRestaurant);
 
 const CreateTableSchema = z.object({
   label: z.string().min(1).max(50),
@@ -17,11 +20,9 @@ const UpdateTableSchema = CreateTableSchema.partial();
 
 // GET /v1/restaurants/:restaurantId/tables
 router.get('/',
-  requireApiKey,
-  requireRestaurantScope('restaurantId'),
   async (req, res, next) => {
     try {
-      const { restaurantId } = req.params;
+      const restaurantId = req.restaurantId;
       const { rows } = await pool.query(
         'SELECT * FROM dining_tables WHERE restaurant_id = $1 ORDER BY label',
         [restaurantId]
@@ -35,13 +36,10 @@ router.get('/',
 
 // POST /v1/restaurants/:restaurantId/tables
 router.post('/',
-  requireApiKey,
-  requireRestaurantScope('restaurantId'),
-  requireRole('manager', 'owner'),
   validate(CreateTableSchema),
   async (req, res, next) => {
     try {
-      const { restaurantId } = req.params;
+      const restaurantId = req.restaurantId;
       const { label, capacity, active } = req.validated;
       try {
         const { rows } = await pool.query(
@@ -62,13 +60,11 @@ router.post('/',
 
 // PATCH /v1/restaurants/:restaurantId/tables/:tableId
 router.patch('/:tableId',
-  requireApiKey,
-  requireRestaurantScope('restaurantId'),
-  requireRole('manager', 'owner'),
   validate(UpdateTableSchema),
   async (req, res, next) => {
     try {
-      const { restaurantId, tableId } = req.params;
+      const restaurantId = req.restaurantId;
+      const { tableId } = req.params;
       const fields = req.validated;
       const keys = Object.keys(fields);
       if (keys.length === 0) {
@@ -102,12 +98,10 @@ router.patch('/:tableId',
 
 // DELETE /v1/restaurants/:restaurantId/tables/:tableId
 router.delete('/:tableId',
-  requireApiKey,
-  requireRestaurantScope('restaurantId'),
-  requireRole('manager', 'owner'),
   async (req, res, next) => {
     try {
-      const { restaurantId, tableId } = req.params;
+      const restaurantId = req.restaurantId;
+      const { tableId } = req.params;
       const { rowCount } = await pool.query(
         'DELETE FROM dining_tables WHERE id = $1 AND restaurant_id = $2',
         [tableId, restaurantId]

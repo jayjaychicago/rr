@@ -13,7 +13,7 @@ export default function ApiBlazeRoute() {
     return <ApiBlazeLogin />;
   }
 
-  const config = parseConfig(cookieStore.get(COOKIE_NAME)?.value, process.env.RESIRESI_API_KEY!);
+  const config = parseConfig(cookieStore.get(COOKIE_NAME)?.value);
 
   return (
     <ApiBlazePanel

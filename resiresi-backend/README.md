@@ -30,14 +30,16 @@ docker compose up
 |---|---|
 | `npm start` | Start server |
 | `npm run migrate` | Apply pending migrations |
-| `npm run seed` | Seed restaurants, tables, API keys |
+| `npm run seed` | Seed restaurants, tables, reservations |
 | `npm test` | Run smoke tests |
 
-## API keys
+## Authentication
 
-Keys are formatted `rsrsi_<env>_<6char>.<32-byte-base64url-secret>`.  
-Accept via `Authorization: Bearer …` or `x-api-key: …`.
+None. This is an **open origin**: it has no keys and no roles of its own, and
+every endpoint is callable without a credential.
 
-Roles: `platform` → `owner` → `manager` → `host` → `diner_app`.
+Access control belongs to the gateway in front of it — that is what issues keys
+to consumers and decides who may call what. Keeping it out of the origin is
+deliberate; don't add auth back here.
 
 See [DEPLOY.md](DEPLOY.md) for production deployment instructions.

@@ -31,7 +31,7 @@ Migrations run automatically via the `release_command` in `fly.toml` before traf
 ## Seed (one-time)
 
 ```bash
-# Prints all plaintext API keys to stdout — save them
+# Seeds restaurants, tables and reservations
 fly ssh console --app resiresi-backend -C "node src/db/seed.js"
 ```
 
@@ -66,11 +66,9 @@ open https://backend.resiresi.com/docs
 ### 3. Create a reservation with Idempotency-Key
 
 ```bash
-OWNER_KEY="rsrsi_live_XXXXXX.your-owner-key-here"
-RESTAURANT_ID="<uuid from seed output>"
+RESTAURANT_ID="nino"   # slug or UUID — both work
 
 curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reservations" \
-  -H "x-api-key: ${OWNER_KEY}" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: test-idem-$(date +%s)" \
   -d '{
@@ -88,8 +86,7 @@ curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reser
 ### 4. List reservations with filters
 
 ```bash
-curl "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reservations?status=confirmed&limit=10" \
-  -H "x-api-key: ${OWNER_KEY}"
+curl "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reservations?status=confirmed&limit=10"
 # → {"data":[...],"page":{"next_cursor":null,"limit":10}}
 ```
 
@@ -101,7 +98,6 @@ STARTS="2026-05-02T20:00:00-05:00"
 
 # First booking
 curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reservations" \
-  -H "x-api-key: ${OWNER_KEY}" \
   -H "Content-Type: application/json" \
   -d "{
     \"diner_name\": \"Alice\",
@@ -114,7 +110,6 @@ curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reser
 
 # Second booking on the same table overlapping
 curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reservations" \
-  -H "x-api-key: ${OWNER_KEY}" \
   -H "Content-Type: application/json" \
   -d "{
     \"diner_name\": \"Bob\",
@@ -126,14 +121,10 @@ curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reser
 # → 409 {"error":{"code":"table_conflict","message":"Table is already booked for this time.",...}}
 ```
 
-### 6. Demonstrate 403 from host key trying to manage tables
+### 6. Confirm the origin needs no credential
 
 ```bash
-HOST_KEY="rsrsi_live_YYYYYY.your-host-key-here"
-
-curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/tables" \
-  -H "x-api-key: ${HOST_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{"label":"Z9","capacity":4}'
-# → 403 {"error":{"code":"forbidden","message":"Insufficient permissions.",...}}
+# No key, no header — the API is open.
+curl "https://backend.resiresi.com/v1/restaurants"
+# → {"data":[...]}
 ```
