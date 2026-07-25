@@ -1,7 +1,7 @@
 # ResiResi x APIblaze guided lab (Windows PowerShell).
-# Explains, runs, and pauses at every step. Just:  .\lab.ps1
+# Explains, runs, and pauses at every step. Just:  .\start.ps1
 # If blocked by execution policy, run once:
-#   powershell -ExecutionPolicy Bypass -File .\lab.ps1
+#   powershell -ExecutionPolicy Bypass -File .\start.ps1
 $ErrorActionPreference = "Stop"
 
 function Need($cmd, $hint) {

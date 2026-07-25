@@ -13,3 +13,4 @@ out/
 
 # guided lab per-run state
 lab/.state.json
+lab/.tunnel.log

@@ -34,16 +34,16 @@ cd rr
 **macOS / Linux:**
 
 ```
-./lab.sh
+./start.sh
 ```
 
 **Windows (PowerShell):**
 
 ```
-.\lab.ps1
+.\start.ps1
 ```
 
-(If Windows blocks it: `powershell -ExecutionPolicy Bypass -File .\lab.ps1`.)
+(If Windows blocks it: `powershell -ExecutionPolicy Bypass -File .\start.ps1`.)
 
 ## What it does
 

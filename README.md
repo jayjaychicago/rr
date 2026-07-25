@@ -25,8 +25,8 @@ version, for reference.)
 Prefer a script that explains each step, pauses, runs it, and shows the result?
 
 ```bash
-./lab.sh        # macOS / Linux
-.\lab.ps1       # Windows (PowerShell)
+./start.sh        # macOS / Linux
+.\start.ps1       # Windows (PowerShell)
 ```
 
 It drives the whole exercise end to end. See **[LAB.md](LAB.md)**. Or set it up

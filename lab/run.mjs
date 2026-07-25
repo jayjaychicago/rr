@@ -5,14 +5,14 @@
  * Explains each step, waits for you to press Enter, runs it, and shows the
  * result — the whole "Full test project" without leaving the terminal. One Node
  * script drives it on macOS, Linux and Windows alike (Node is already required
- * to run the apps). Launched by ../lab.sh (mac/linux) or ../lab.ps1 (windows).
+ * to run the apps). Launched by ../start.sh (mac/linux) or ../start.ps1 (windows).
  *
  * Everything runs on your machine: the reservation API (a tiny Node server), the platform
  * app, and a proxy in front of it via APIblaze's localhost tunnel.
  */
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { writeFileSync, readFileSync } from "node:fs";
+import { writeFileSync, readFileSync, openSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { wireWidgets } from "./wire.mjs";
@@ -30,7 +30,18 @@ const bold = (s) => c(1, s), cyan = (s) => c(36, s), green = (s) => c(32, s),
       yellow = (s) => c(33, s), dim = (s) => c(2, s), red = (s) => c(31, s);
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 const ask = (q) => new Promise((res) => rl.question(q, res));
-const pause = (msg = "Press Enter to run this step") => ask(`\n${cyan("▸ " + msg)} `);
+
+// Show the exact command a step is about to run, THEN wait for Enter — so nothing
+// runs before the user has seen what it is. `cmd` is the friendly command string
+// (or a short "what happens" line for steps that aren't a single command).
+function pause(msg = "Press Enter to run this step", cmd) {
+  if (cmd) console.log("\n" + dim("  about to run:") + "\n    " + green(cmd));
+  return ask(`\n${cyan("▸ " + msg)} `);
+}
+
+// Friendly display form of an `apiblaze …` invocation (drops the npx plumbing and
+// the machine-only --json flag, so the user sees the command they'd type).
+const abzDisplay = (args) => "apiblaze " + args.filter((a) => a !== "--json").join(" ");
 
 let N = 0;
 function step(title, explain) {
@@ -107,7 +118,7 @@ const abz = (args, opts) => run(NPX, [...ABZ, ...args], opts);
 const abzCapture = (args, opts) => capture(NPX, [...ABZ, ...args], opts);
 
 async function preflight() {
-  step("Check your tools", "Just Node 20+ and npx — no Docker, no database to install.");
+  step("Check your tools", "This lab needs Node 20+ and npx (both ship with Node.js).");
   await pause();
   const major = Number(process.versions.node.split(".")[0]);
   if (major < 20) throw new Error(`Node 20+ required — you have ${process.versions.node}. https://nodejs.org`);
@@ -150,9 +161,9 @@ async function main() {
 
   // 1 · backend
   step("Start the reservation API",
-    "A zero-dependency Node server, seeded in memory. Runs in the background on\n" +
-    "http://localhost:8080 — no Docker, no database to install.");
-  await pause();
+    "ResiResi's reservation API. It runs on your machine in the background at\n" +
+    "http://localhost:8080 for the rest of the lab.");
+  await pause("Press Enter to run this step", "node resiresi-backend-lightweight/server.js");
   startBg(process.execPath, [join(BACKEND_LW, "server.js")], { env: { ...process.env, PORT: "8080" } });
   process.stdout.write(dim("  waiting for http://localhost:8080/healthz "));
   await waitFor(async () => {
@@ -163,18 +174,24 @@ async function main() {
 
   // 2 · login
   step("Log in to APIblaze",
-    "The next step tunnels your localhost to a public proxy URL — an\n" +
-    "authenticated feature, so log in (opens your browser).");
-  await pause();
+    "A later step gives your local API a public URL through APIblaze. That needs\n" +
+    "an account, so this opens your browser to log in (free to sign up).");
+  await pause("Press Enter to run this step", "apiblaze login");
   await abz(["login"]);
 
   // 3 · create proxy
-  step("Create the proxy in front of your local API",
-    `--identified makes every call name the person it's for (X-End-User-Id);\n` +
-    `--iam makes users & groups apply. Named ${PROXY} so it won't collide.`);
-  await pause();
-  const cj = await abzCapture(["create", "--name", PROXY,
-    "--target", "http://localhost:8080", "--auth", "api_key", "--identified", "--iam", "--json"]);
+  const createArgs = ["create", "--name", PROXY,
+    "--target", "http://localhost:8080", "--auth", "api_key", "--identified", "--iam", "--json"];
+  step("Put APIblaze in front of your reservation API",
+    "This creates a gateway that sits in front of your API. Two options switch on\n" +
+    "the features this lab needs:\n" +
+    "  • --identified — each request can say which PERSON it's for, so later a\n" +
+    "    rule can give every diner only their own reservations.\n" +
+    "  • --iam — turns on users & groups, so you can put staff (like Maria) in a\n" +
+    "    group a rule can treat differently.\n" +
+    `The name "${PROXY}" is unique to your run, so no two testers ever clash.`);
+  await pause("Press Enter to run this step", abzDisplay(createArgs));
+  const cj = await abzCapture(createArgs);
   const created = JSON.parse(cj.slice(cj.indexOf("{"), cj.lastIndexOf("}") + 1));
   const projectId = created.project_id || PROXY;
   const PROD = `https://${projectId}.abz.run/1.0.0/prod`;
@@ -183,17 +200,30 @@ async function main() {
   console.log("  Proxy (prod): " + green(PROD));
 
   // 4 · tunnel
-  step("Open the tunnel (leave it running)",
-    "This bridges your cloud proxy to the backend on your laptop. It runs in the\n" +
-    "background for the rest of the lab.");
-  await pause();
-  startBg(NPX, [...ABZ, "dev", "8080"]);
+  const tunnelArgs = ["dev", "8080", "--project", PROXY, "--yes"];
+  step("Connect your API to the gateway",
+    "Your API lives on your laptop; the gateway lives in the cloud. This opens a\n" +
+    "secure link between them so real calls to the public URL reach your machine.\n" +
+    "It keeps running in the background for the rest of the lab.");
+  await pause("Press Enter to run this step", abzDisplay(tunnelArgs));
+  // Capture the tunnel's output to a log so a failure is diagnosable instead of a
+  // silent timeout (it runs headless, so its own errors would otherwise vanish).
+  const tunnelLog = join(ROOT, "lab", ".tunnel.log");
+  const tlog = openSync(tunnelLog, "w");
+  startBg(NPX, [...ABZ, ...tunnelArgs], { stdio: ["ignore", tlog, tlog] });
   process.stdout.write(dim("  connecting the tunnel "));
-  await waitFor(async () => {
-    process.stdout.write(dim("."));
-    const r = await httpOk(`${PROD}/v1/restaurants`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
-    return r !== null;
-  }, { tries: 40, what: "the tunnel" });
+  try {
+    await waitFor(async () => {
+      process.stdout.write(dim("."));
+      const r = await httpOk(`${PROD}/v1/restaurants`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
+      return r !== null;
+    }, { tries: 60, what: "the tunnel" });
+  } catch (e) {
+    let tail = "";
+    try { tail = readFileSync(tunnelLog, "utf8").split("\n").slice(-12).join("\n"); } catch {}
+    if (tail.trim()) console.log("\n" + dim("  tunnel output:\n") + tail.replace(/^/gm, "    "));
+    throw e;
+  }
   console.log(green("  tunnel up ✓"));
 
   // 5 · smoke test
@@ -210,10 +240,12 @@ async function main() {
 
   // 6 · widget key
   step("Mint the control-plane widget key",
-    "A scoped manager key {call, configure, issue-keys} — not a full admin key.\n" +
-    "It powers the two widgets, server-side. Shown once.");
-  await pause();
-  const mj = await abzCapture(["apikeys", "mint", "--desc", "resiresi widget key", "--json"]);
+    "A limited manager key that lets the app's own widgets issue tenant keys and\n" +
+    "read users & groups — without being a full admin key. It stays on the server,\n" +
+    "never in the browser. Shown once.");
+  const mintArgs = ["apikeys", "mint", "--desc", "resiresi widget key", "--json"];
+  await pause("Press Enter to run this step", abzDisplay(mintArgs));
+  const mj = await abzCapture(mintArgs);
   const CPKEY = JSON.parse(mj.slice(mj.indexOf("{"), mj.lastIndexOf("}") + 1)).key;
   state.cpkey = CPKEY; saveState(state);
 
@@ -221,7 +253,7 @@ async function main() {
   step("Install the platform app + drop in the key",
     "The app defaults to your local backend; the only secret it needs is the\n" +
     "widget key (stays server-side, never reaches the browser).");
-  await pause();
+  await pause("Press Enter to run this step", "cd resiresi-frontend && npm install && npm install apiblaze");
   await run(NPM, ["install"], { cwd: FE });
   await run(NPM, ["install", "apiblaze"], { cwd: FE });
   writeFileSync(join(FE, ".env.local"), `APIBLAZE_CP_KEY=${CPKEY}\n`);
@@ -237,8 +269,8 @@ async function main() {
 
   // 9 · dev server
   step("Start the platform app",
-    "Serves http://localhost:3003 in the background.");
-  await pause();
+    "Runs ResiResi's app on http://localhost:3003 in the background.");
+  await pause("Press Enter to run this step", "cd resiresi-frontend && npm run dev");
   startBg(NPM, ["run", "dev"], { cwd: FE, env: { ...process.env, APIBLAZE_CP_KEY: CPKEY } });
   process.stdout.write(dim("  starting http://localhost:3003 "));
   await waitFor(async () => { process.stdout.write(dim(".")); return await httpOk("http://localhost:3003/login"); },
@@ -254,10 +286,11 @@ async function main() {
 
   // 11 · crown admin
   step("Crown yourself the first admin",
-    "You hold the control-plane key, so you seed the first admin from here.\n" +
-    "Then the widget lets you manage staff.");
-  await pause();
-  await abz(["admins", "add", "owner@nino.com", "--tenant", "nino"]);
+    "You hold the manager key, so you name the very first admin from here. After\n" +
+    "this, the Users & Groups widget lets that admin manage everyone else.");
+  const adminArgs = ["admins", "add", "owner@nino.com", "--tenant", "nino"];
+  await pause("Press Enter to run this step", abzDisplay(adminArgs));
+  await abz(adminArgs);
   console.log(dim("  Reload the Users & Groups widget — it flips from pending to ready."));
 
   // 12 · BEFORE
@@ -283,7 +316,7 @@ async function main() {
     '  reservations whose diner_external_id matches their X-End-User-Id, unless they\n' +
     '  are in the "reservationists" group, who can see all of them.') + "\n\n" +
     dim("  Then type /enable (or follow the agent's prompt) and exit the chat."));
-  await pause("Press Enter to open the agent");
+  await pause("Press Enter to open the agent", abzDisplay(["agent", "authz", PROXY]));
   await abz(["agent", "authz", PROXY]);
 
   // 15 · AFTER
@@ -304,7 +337,7 @@ async function main() {
 
 main().catch((e) => {
   console.error(red("\n  ✗ " + (e?.message || e)));
-  console.error(dim("  Fix the issue above and re-run  ./lab.sh  (or  .\\lab.ps1 ) — it resumes with the same proxy."));
+  console.error(dim("  Fix the issue above and re-run  ./start.sh  (or  .\\start.ps1 ) — it resumes with the same proxy."));
   rl.close();
   process.exit(1);
 });
