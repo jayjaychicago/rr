@@ -19,6 +19,18 @@ purpose: access control is the gateway's job.
 - **Node.js 20+** (`node -v`)
 - **Docker** (`docker -v`) — for the backend's Postgres + API
 
+## Fastest path — the guided lab
+
+Prefer a script that explains each step, pauses, runs it, and shows the result?
+
+```bash
+./lab.sh        # macOS / Linux
+.\lab.ps1       # Windows (PowerShell)
+```
+
+It drives the whole exercise end to end. See **[LAB.md](LAB.md)**. Or set it up
+by hand below.
+
 ## Run it
 
 ```bash
