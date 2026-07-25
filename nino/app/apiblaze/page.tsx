@@ -18,7 +18,7 @@ export default function ApiBlazeRoute() {
   return (
     <ApiBlazePanel
       config={config}
-      originalUrl="https://backend.resiresi.com"
+      originalUrl="http://localhost:8080"
       proxyUrl="https://rr-nino.apiblaze.com/1.0.0/prod"
       ownOriginalUrl={process.env.NEXTAUTH_URL ?? "https://ninopizzas.com"}
       ownProxyUrl="https://nino-api.apiblaze.com"

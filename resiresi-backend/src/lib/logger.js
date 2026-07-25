@@ -1,4 +1,9 @@
 import pino from 'pino';
+import { createRequire } from 'module';
+
+const canResolve = (pkg) => {
+  try { createRequire(import.meta.url).resolve(pkg); return true; } catch { return false; }
+};
 
 const pinoOpts = {
   level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
@@ -17,7 +22,12 @@ const pinoOpts = {
 
 function buildTransport() {
   if (process.env.NODE_ENV !== 'production') {
-    return { target: 'pino-pretty', options: { colorize: true } };
+    // pino-pretty is a devDependency; inside the Docker image (production deps
+    // only, NODE_ENV=development in compose) it's absent — fall back to plain
+    // stdout instead of crashing at boot.
+    return canResolve('pino-pretty')
+      ? { target: 'pino-pretty', options: { colorize: true } }
+      : { target: 'pino/file', options: { destination: 1 } };
   }
 
   const targets = [

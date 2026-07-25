@@ -9,19 +9,26 @@ A tiny, self-contained restaurant-reservation platform used to try out
 | `nino`              | Nino's Pizza storefront (a ResiResi tenant)  | http://localhost:3001  |
 | `gino`              | Gino's Pizza storefront (a ResiResi tenant)  | http://localhost:3002  |
 
-All three talk to the **live reservation API** at `https://backend.resiresi.com`
-— it's open (no key required), so there's no backend to run. (`resiresi-backend`
-and `restaurant-backend` are that API's source, included for reference only; you
-don't need them to run the apps.)
+All three talk to the **reservation API you run locally** — `resiresi-backend`
+ships in this repo and runs in Docker on `http://localhost:8080`, seeding itself
+with restaurants and reservations. It's an open API (no keys of its own) on
+purpose: access control is the gateway's job.
 
 ## Requirements
 
 - **Node.js 20+** (`node -v`)
+- **Docker** (`docker -v`) — for the backend's Postgres + API
 
 ## Run it
 
 ```bash
 git clone https://github.com/jayjaychicago/rr
+```
+
+The reservation API (start this first — migrations and seed run automatically):
+
+```bash
+cd rr/resiresi-backend && docker compose up -d
 ```
 
 ResiResi platform (the main app):
@@ -42,10 +49,10 @@ Gino's storefront, in a third terminal:
 cd rr/gino && npm install && npm run dev
 ```
 
-That's it — no environment file needed. Each app defaults to the live open
-backend. To point one at your own APIblaze proxy instead, copy its
-`.env.example` to `.env.local` and set `RESIRESI_API_URL` (and, in proxy mode,
-`RESIRESI_API_KEY`).
+That's it — no environment file needed. Each app defaults to the local backend
+at `http://localhost:8080`. To point one at your APIblaze proxy instead, copy
+its `.env.example` to `.env.local` and set `RESIRESI_API_URL` (and, in proxy
+mode, `RESIRESI_API_KEY`).
 
 ## Signing in
 

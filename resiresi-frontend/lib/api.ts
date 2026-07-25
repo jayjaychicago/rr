@@ -1,6 +1,6 @@
 /** The backend the app talks to, without the version prefix. */
 export const API_ORIGIN =
-  process.env.RESIRESI_API_URL ?? "https://backend.resiresi.com";
+  process.env.RESIRESI_API_URL ?? "http://localhost:8080";
 
 export const SPEC_URL = `${API_ORIGIN}/openapi.yaml`;
 export const DOCS_URL = `${API_ORIGIN}/docs`;
