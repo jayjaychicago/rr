@@ -1,23 +1,6 @@
-import { REPO_URL, PROXY_NAME } from "@/lib/study-config";
+import { REPO_URL } from "@/lib/study-config";
+import { Code, ProxyName } from "./personal";
 
-function Code({ label, children }: { label?: string; children: string }) {
-  return (
-    <div className="mt-3">
-      {label && (
-        <div className="rounded-t-lg border-b border-slate-700 bg-slate-800 px-4 py-1.5 font-mono text-[11px] text-slate-300">
-          {label}
-        </div>
-      )}
-      <pre
-        className={`overflow-x-auto bg-slate-900 px-4 py-3 text-xs leading-relaxed text-slate-100 ${
-          label ? "rounded-b-lg" : "rounded-lg"
-        }`}
-      >
-        <code>{children}</code>
-      </pre>
-    </div>
-  );
-}
 
 function Step({
   n,
@@ -54,7 +37,7 @@ localhost tunnel needs login — I will complete the browser login when prompted
 2. Log in to APIblaze (opens a browser; I'll complete it), then create the proxy
    pointing at the local backend:
      npx apiblaze login
-     npx apiblaze create --name ${PROXY_NAME} --target http://localhost:8080 --auth api_key --identified --iam
+     npx apiblaze create --name resiresi0000 --target http://localhost:8080 --auth api_key --identified --iam
    Note from the output: PROD = the Proxy URL ending in /prod (on *.abz.run) and
    DPKEY = the API key. If the name is taken, add a few digits and retry.
 
@@ -116,7 +99,7 @@ localhost tunnel needs login — I will complete the browser login when prompted
    BEFORE — the step-4 curl as john@nino.com returns ALL reservations.
    In the Users & Groups widget, create a group "reservationists" and add
    maria@nino.com. Then set the rule:
-     npx apiblaze agent authz ${PROXY_NAME}
+     npx apiblaze agent authz resiresi0000
    and tell it: "On GET /restaurants/{restaurantId}/reservations a caller sees only
    reservations whose diner_external_id equals their X-End-User-Id, unless they are
    in the reservationists group, who see all."
@@ -209,12 +192,12 @@ npm run dev`}</Code>
           <span className="font-mono text-xs">--iam</span> makes users &amp; groups
           apply to those calls.
           <Code label="your laptop — terminal">{`npx apiblaze login
-npx apiblaze create --name ${PROXY_NAME} --target http://localhost:8080 --auth api_key --identified --iam`}</Code>
+npx apiblaze create --name resiresi0000 --target http://localhost:8080 --auth api_key --identified --iam`}</Code>
           <p className="mt-2 text-xs text-slate-400">
             Note the printed <span className="font-mono">Proxy URL</span> (ends in{" "}
             <span className="font-mono">/prod</span>, on{" "}
             <span className="font-mono">*.abz.run</span>) and the API key. If the
-            name <span className="font-mono">{PROXY_NAME}</span> is taken, add a few
+            name <ProxyName /> is taken, add a few
             digits and use your actual URL below.
           </p>
         </Step>
@@ -229,7 +212,7 @@ npx apiblaze create --name ${PROXY_NAME} --target http://localhost:8080 --auth a
         <Step n="B3" title="Prove the proxy reaches your local backend">
           The real API path is <span className="font-mono text-xs">/v1/…</span>, and
           every call names the person it acts for:
-          <Code label="your laptop — terminal">{`curl "https://${PROXY_NAME}.abz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
+          <Code label="your laptop — terminal">{`curl "https://resiresi0000.abz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
   -H "X-API-Key: <the API key from B1>" \\
   -H "X-End-User-Id: john@nino.com"`}</Code>
           Reservations, served from <em>your</em> machine, through your proxy.
@@ -364,7 +347,7 @@ export const POST = handler;`}</Code>
           <Code label="your laptop — terminal">{`cd rr/nino
 
 cat > .env.local <<EOF
-RESIRESI_API_URL=https://${PROXY_NAME}.abz.run/1.0.0/prod
+RESIRESI_API_URL=https://resiresi0000.abz.run/1.0.0/prod
 RESIRESI_API_KEY=<the key from D1>
 RESIRESI_RESTAURANT_ID=nino
 EOF
@@ -403,7 +386,7 @@ headers: {
         <Step n="E1" title="BEFORE — John can see everyone's reservations">
           <Code label="your laptop — terminal">{`NINO_KEY="<the key from D1>"
 
-curl "https://${PROXY_NAME}.abz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
+curl "https://resiresi0000.abz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
   -H "X-API-Key: $NINO_KEY" \\
   -H "X-End-User-Id: john@nino.com"`}</Code>
           The response is every diner&apos;s reservations — John shouldn&apos;t see
@@ -419,17 +402,17 @@ curl "https://${PROXY_NAME}.abz.run/1.0.0/prod/v1/restaurants/nino/reservations"
 
         <Step n="E3" title="Chat the rule into place">
           Describe the policy in plain English and let the agent design and enable it:
-          <Code label="your laptop — terminal">{`npx apiblaze agent authz ${PROXY_NAME}`}</Code>
+          <Code label="your laptop — terminal">{`npx apiblaze agent authz resiresi0000`}</Code>
           <Code label="in the chat">{`On GET /restaurants/{restaurantId}/reservations: a caller may only see
 reservations whose diner_external_id matches their X-End-User-Id —
 unless they are in the "reservationists" group, who can see all of them.`}</Code>
         </Step>
 
         <Step n="E4" title="AFTER — John sees only John; Maria sees everything">
-          <Code label="John — a diner: now only his own bookings">{`curl "https://${PROXY_NAME}.abz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
+          <Code label="John — a diner: now only his own bookings">{`curl "https://resiresi0000.abz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
   -H "X-API-Key: $NINO_KEY" \\
   -H "X-End-User-Id: john@nino.com"`}</Code>
-          <Code label="Maria — in the reservationists group: still sees all of them">{`curl "https://${PROXY_NAME}.abz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
+          <Code label="Maria — in the reservationists group: still sees all of them">{`curl "https://resiresi0000.abz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
   -H "X-API-Key: $NINO_KEY" \\
   -H "X-End-User-Id: maria@nino.com"`}</Code>
           Same key, same endpoint — the <em>person</em> and their <em>group</em> now
