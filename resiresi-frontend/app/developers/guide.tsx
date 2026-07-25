@@ -57,10 +57,10 @@ reservation API (ResiResi) and adds per-user access control. Run everything on
 this machine and tell me the result of each step and anything that fails. No
 APIblaze login/account is needed. Node 20+ required.
 
-1. Create an anonymous APIblaze proxy (no login) and capture the JSON:
-     npx apiblaze create --name resiresi-demo --target https://backend.resiresi.com --auth api_key --iam --json
-   From the output note: PROD = the endpoint ending in /prod (it's on *.tryabz.run),
-   and DPKEY = api_keys.prod (a data-plane key). If the name is taken, add digits.
+1. Create an anonymous APIblaze proxy (no login):
+     npx apiblaze create --name resiresi-demo --target https://backend.resiresi.com --auth api_key --iam
+   From the printed output note: PROD = the Proxy URL (ends in /prod, on *.tryabz.run)
+   and DPKEY = the API key. If the name is taken, add a few digits and retry.
 
 2. Smoke-test the proxy. The real API path is /v1/..., and send an end-user id:
      curl "$PROD/v1/restaurants/nino/reservations" -H "X-API-Key: $DPKEY" -H "X-End-User-Id: john@nino.com"
@@ -108,9 +108,11 @@ APIblaze login/account is needed. Node 20+ required.
      <UsersGroupsWidget title="Your staff" theme={{ accent: "#4f46e5" }} />
 
 6. Start it: npm run dev  (serves http://localhost:3003). Open
-   http://localhost:3003/developers, sign in with any name + email, and confirm
-   both widgets load. If Users & Groups says "admin access pending", add your own
-   email as an admin from inside the widget, then reload.
+   http://localhost:3003/developers, sign in with any name + email (e.g.
+   owner@nino.com), and confirm both widgets load. Users & Groups will say
+   "admin access pending" — the admin list is sealed from inside the widget.
+   Crown the first admin from the terminal, then reload the widget:
+     npx apiblaze admins add owner@nino.com --tenant nino
 
 7. Prove per-user access control:
    BEFORE — curl as john@nino.com (step 2 command) returns ALL reservations.
@@ -320,10 +322,12 @@ export const POST = handler;`}</Code>
         </Step>
 
         <p className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-xs text-slate-500">
-          First time managing staff, the Users &amp; Groups widget may say{" "}
-          <em>admin access pending</em> — add your own email as an admin from inside the
-          widget (you hold the control-plane key, so you can), then reload.
+          First time managing staff, the Users &amp; Groups widget says{" "}
+          <em>admin access pending</em> — the admin list is sealed from inside the
+          widget on purpose. Crown the first admin from your terminal (you hold the
+          control-plane key), then reload the widget:
         </p>
+        <Code label="your laptop — terminal">{`npx apiblaze admins add owner@nino.com --tenant nino`}</Code>
       </section>
 
       {/* ---------- PART D ---------- */}
@@ -431,17 +435,6 @@ curl "https://${PROXY_NAME}.tryabz.run/1.0.0/prod/v1/restaurants/nino/reservatio
         </Step>
       </section>
 
-      {/* ---------- MODERATOR FOOTER ---------- */}
-      <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-xs text-slate-400">
-        Study moderator only — reset between testers: on the study EC2 run{" "}
-        <span className="font-mono">cd /home/ubuntu/code/rr &amp;&amp; ./study-reset.sh</span>{" "}
-        before handing over and again after the session (reverts the code to the{" "}
-        <span className="font-mono">study-baseline</span> tag and redeploys resiresi,
-        nino and gino). The baseline itself was captured once with{" "}
-        <span className="font-mono">./study-snapshot.sh</span>. The tester&apos;s own
-        APIblaze account, proxy and keys live in <em>their</em> workspace and need no
-        cleanup.
-      </p>
     </div>
   );
 }
