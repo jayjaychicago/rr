@@ -39,9 +39,9 @@ function pause(msg = "Press Enter to run this step", cmd) {
   return ask(`\n${cyan("▸ " + msg)} `);
 }
 
-// Friendly display form of an `apiblaze …` invocation (drops the npx plumbing and
-// the machine-only --json flag, so the user sees the command they'd type).
-const abzDisplay = (args) => "apiblaze " + args.filter((a) => a !== "--json").join(" ");
+// Friendly display form of an APIblaze invocation: the real `npx apiblaze …`
+// command the user would type, minus only the machine-only --json flag.
+const abzDisplay = (args) => "npx apiblaze " + args.filter((a) => a !== "--json").join(" ");
 
 let N = 0;
 function step(title, explain) {
@@ -113,7 +113,10 @@ function commandOk(cmd, args) {
 
 // Every APIblaze call goes through npx with --yes, so npx fetches the CLI once
 // (first use) WITHOUT its interactive "Ok to proceed?" prompt, then reuses it.
-const ABZ = ["--yes", "apiblaze@latest"];
+// Pinned to an exact version (not @latest) so npx installs it ONCE and then runs
+// straight from cache on every later call — no per-command registry round-trip,
+// no repeated prompts, and the lab always runs the version it was written for.
+const ABZ = ["--yes", "apiblaze@0.19.3"];
 const abz = (args, opts) => run(NPX, [...ABZ, ...args], opts);
 const abzCapture = (args, opts) => capture(NPX, [...ABZ, ...args], opts);
 
@@ -125,7 +128,7 @@ async function preflight() {
   if (!(await commandOk(NPX, ["--version"]))) throw new Error("npx not found — reinstall Node.js. https://nodejs.org");
   console.log(green(`  Node ${process.versions.node} · npx ✓`));
   console.log(dim("  Fetching the APIblaze CLI via npx (first time only)…"));
-  await run(NPX, ["--yes", "apiblaze@latest", "--version"]);
+  await run(NPX, [...ABZ, "--version"]);
   console.log(green("  APIblaze CLI ready ✓"));
 }
 
@@ -203,14 +206,42 @@ async function main() {
     "  • --iam — turns on users & groups, so you can put staff (like Maria) in a\n" +
     "    group a rule can treat differently.\n" +
     `The name "${PROXY}" is unique to your run, so no two testers ever clash.`);
-  await pause("Press Enter to run this step", abzDisplay(createArgs));
-  const cj = await abzCapture(createArgs);
-  const created = JSON.parse(cj.slice(cj.indexOf("{"), cj.lastIndexOf("}") + 1));
-  const projectId = created.project_id || PROXY;
-  const PROD = `https://${projectId}.abz.run/1.0.0/prod`;
-  const DPKEY = (created.api_keys && created.api_keys.prod) || created.api_key;
-  state.prod = PROD; state.dpkey = DPKEY; saveState(state);
-  console.log("  Proxy (prod): " + green(PROD));
+  const parseCreate = (out) => {
+    const created = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1));
+    const projectId = created.project_id || PROXY;
+    return {
+      prod: `https://${projectId}.abz.run/1.0.0/prod`,
+      dpkey: (created.api_keys && created.api_keys.prod) || created.api_key,
+    };
+  };
+
+  let PROD, DPKEY;
+  if (state.prod && state.dpkey) {
+    // An earlier run already created this proxy (and saved its key) — reuse it
+    // instead of trying to create a duplicate (which the server rejects).
+    console.log(dim("\n  You already created this proxy on an earlier run — reusing it,\n" +
+      "  no need to create it again."));
+    await pause("Press Enter to continue");
+    PROD = state.prod; DPKEY = state.dpkey;
+    console.log(green("  Reusing " + PROD + " ✓"));
+  } else {
+    await pause("Press Enter to run this step", abzDisplay(createArgs));
+    let cj;
+    try {
+      cj = await abzCapture(createArgs);
+    } catch (e) {
+      // The name exists on the server but this run has no key for it (a half-
+      // finished earlier attempt). Remove that empty shell and create it fresh so
+      // the lab ends up with a working key — no manual cleanup needed.
+      console.log(yellow(`\n  "${PROXY}" already exists but this run has no key for it.`));
+      console.log(dim("  Removing the old one and recreating it so the lab has a working key…"));
+      await abz(["delete", PROXY, "--yes"]).catch(() => {});
+      cj = await abzCapture(createArgs);
+    }
+    ({ prod: PROD, dpkey: DPKEY } = parseCreate(cj));
+    state.prod = PROD; state.dpkey = DPKEY; saveState(state);
+    console.log("  Proxy (prod): " + green(PROD));
+  }
 
   // 4 · tunnel
   const tunnelArgs = ["dev", "8080", "--project", PROXY, "--yes"];
@@ -257,10 +288,17 @@ async function main() {
     "read users & groups — without being a full admin key. It stays on the server,\n" +
     "never in the browser. Shown once.");
   const mintArgs = ["apikeys", "mint", "--desc", "resiresi widget key", "--json"];
-  await pause("Press Enter to run this step", abzDisplay(mintArgs));
-  const mj = await abzCapture(mintArgs);
-  const CPKEY = JSON.parse(mj.slice(mj.indexOf("{"), mj.lastIndexOf("}") + 1)).key;
-  state.cpkey = CPKEY; saveState(state);
+  let CPKEY;
+  if (state.cpkey) {
+    console.log(dim("\n  You already minted this key on an earlier run — reusing it."));
+    await pause("Press Enter to continue");
+    CPKEY = state.cpkey;
+  } else {
+    await pause("Press Enter to run this step", abzDisplay(mintArgs));
+    const mj = await abzCapture(mintArgs);
+    CPKEY = JSON.parse(mj.slice(mj.indexOf("{"), mj.lastIndexOf("}") + 1)).key;
+    state.cpkey = CPKEY; saveState(state);
+  }
 
   // 7 · frontend deps + env
   step("Install the platform app + drop in the key",
