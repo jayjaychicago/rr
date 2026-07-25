@@ -22,16 +22,24 @@ don't need them to run the apps.)
 
 ```bash
 git clone https://github.com/jayjaychicago/rr
-cd rr
+```
 
-# ResiResi platform (the main app)
-cd resiresi-frontend && npm install && npm run dev     # → http://localhost:3003
+ResiResi platform (the main app):
 
-# Nino's storefront — in a second terminal
-cd nino && npm install && npm run dev                  # → http://localhost:3001
+```bash
+cd rr/resiresi-frontend && npm install && npm run dev
+```
 
-# Gino's storefront — in a third terminal
-cd gino && npm install && npm run dev                  # → http://localhost:3002
+Nino's storefront, in a second terminal:
+
+```bash
+cd rr/nino && npm install && npm run dev
+```
+
+Gino's storefront, in a third terminal:
+
+```bash
+cd rr/gino && npm install && npm run dev
 ```
 
 That's it — no environment file needed. Each app defaults to the live open

@@ -224,7 +224,7 @@ List the reservations for ${PROXY_NAME} again`}</Code>
           <Code label="your laptop — terminal">{`git clone ${REPO_URL}
 cd rr/resiresi-frontend
 npm install
-npm run dev        # → http://localhost:3003`}</Code>
+npm run dev`}</Code>
         </Step>
 
         <Step n="B2" title="Install the APIblaze SDK">
@@ -363,7 +363,7 @@ RESIRESI_RESTAURANT_ID=nino
 EOF
 
 npm install
-npm run dev        # → http://localhost:3001`}</Code>
+npm run dev`}</Code>
         </Step>
 
         <Step n="D3" title="Who is calling? The storefront already tells you">
@@ -400,8 +400,8 @@ headers: {
 
 curl "https://${PROXY_NAME}.tryabz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
   -H "X-API-Key: $NINO_KEY" \\
-  -H "X-End-User-Id: john@nino.com"
-# → every diner's reservations. John shouldn't see these.`}</Code>
+  -H "X-End-User-Id: john@nino.com"`}</Code>
+          The response is every diner’s reservations — John shouldn’t see those.
         </Step>
 
         <Step n="E2" title="Put your reservation staff in a group">
@@ -421,13 +421,10 @@ unless they are in the "reservationists" group, who can see all of them.`}</Code
 
         <Step n="E4" title="AFTER — John sees only John; Maria sees everything">
           Run the same two calls again:
-          <Code label="your laptop — terminal">{`# John (a diner): now only his own bookings
-curl "https://${PROXY_NAME}.tryabz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
+          <Code label="John — a diner: now only his own bookings">{`curl "https://${PROXY_NAME}.tryabz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
   -H "X-API-Key: $NINO_KEY" \\
-  -H "X-End-User-Id: john@nino.com"
-
-# Maria (in the reservationists group): still sees all of them
-curl "https://${PROXY_NAME}.tryabz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
+  -H "X-End-User-Id: john@nino.com"`}</Code>
+          <Code label="Maria — in the reservationists group: still sees all of them">{`curl "https://${PROXY_NAME}.tryabz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
   -H "X-API-Key: $NINO_KEY" \\
   -H "X-End-User-Id: maria@nino.com"`}</Code>
           Same key, same endpoint — the <em>person</em> and their <em>group</em> now
