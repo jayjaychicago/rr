@@ -1,0 +1,819 @@
+openapi: 3.1.0
+info:
+  title: ResiResi Restaurant Reservation API
+  version: 1.0.0
+  description: 'Backend reservation API for the ResiResi platform. Used as the APIblaze proxy reference
+    origin.
+
+    This origin is open: it requires no credentials of its own.
+
+    '
+servers:
+- url: https://backend.resiresi.com/v1
+  description: Production
+- url: http://localhost:8080/v1
+  description: Local development
+components:
+  schemas:
+    Error:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          - request_id
+          properties:
+            code:
+              type: string
+              example: not_found
+            message:
+              type: string
+              example: Restaurant not found.
+            request_id:
+              type: string
+              format: uuid
+            details:
+              type: object
+              description: Zod flatten() output on validation errors
+    OpenHour:
+      type: object
+      required:
+      - day_of_week
+      - open
+      - close
+      properties:
+        day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: 0=Sunday … 6=Saturday
+        open:
+          type: string
+          pattern: ^\d{2}:\d{2}$
+          example: '11:00'
+        close:
+          type: string
+          pattern: ^\d{2}:\d{2}$
+          example: '22:00'
+    Restaurant:
+      type: object
+      required:
+      - id
+      - slug
+      - name
+      - timezone
+      - open_hours
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+          example: nino
+          description: Short identifier usable anywhere a restaurant is addressed in a path (e.g. `nino`,
+            `gino`).
+        name:
+          type: string
+          example: Le Bernardin
+        timezone:
+          type: string
+          example: America/New_York
+        open_hours:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenHour'
+        address:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Table:
+      type: object
+      required:
+      - id
+      - restaurant_id
+      - label
+      - capacity
+      - active
+      properties:
+        id:
+          type: string
+          format: uuid
+        restaurant_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+          example: B1
+        capacity:
+          type: integer
+          minimum: 1
+        active:
+          type: boolean
+    ReservationStatus:
+      type: string
+      enum:
+      - pending
+      - confirmed
+      - seated
+      - completed
+      - cancelled
+      - no_show
+    Reservation:
+      type: object
+      required:
+      - id
+      - restaurant_id
+      - diner_name
+      - party_size
+      - starts_at
+      - ends_at
+      - status
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        restaurant_id:
+          type: string
+          format: uuid
+        table_id:
+          type: string
+          format: uuid
+          nullable: true
+        diner_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        diner_name:
+          type: string
+        diner_email:
+          type: string
+          format: email
+          nullable: true
+        diner_phone:
+          type: string
+          nullable: true
+        party_size:
+          type: integer
+          minimum: 1
+          maximum: 50
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/ReservationStatus'
+        notes:
+          type: string
+          nullable: true
+        idempotency_key:
+          type: string
+          nullable: true
+        created_by_key_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PageInfo:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+          description: base64url cursor to pass as ?cursor= for the next page
+        limit:
+          type: integer
+    RestaurantList:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Restaurant'
+    TableList:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Table'
+    ReservationList:
+      type: object
+      required:
+      - data
+      - page
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reservation'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      tags:
+      - System
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  db:
+                    type: string
+                    example: ok
+        '503':
+          description: DB unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /openapi.yaml:
+    get:
+      operationId: getOpenApiSpec
+      summary: OpenAPI spec (YAML)
+      tags:
+      - System
+      responses:
+        '200':
+          description: OpenAPI YAML
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /docs:
+    get:
+      operationId: getSwaggerUi
+      summary: Swagger UI
+      tags:
+      - System
+      responses:
+        '200':
+          description: HTML page
+  /restaurants:
+    get:
+      operationId: listRestaurants
+      summary: List restaurants
+      tags:
+      - Restaurants
+      responses:
+        '200':
+          description: List of restaurants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantList'
+    post:
+      operationId: createRestaurant
+      summary: Create restaurant
+      tags:
+      - Restaurants
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - slug
+              - name
+              properties:
+                slug:
+                  type: string
+                  pattern: ^[a-z0-9-]+$
+                name:
+                  type: string
+                timezone:
+                  type: string
+                  default: America/Detroit
+                open_hours:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/OpenHour'
+                address:
+                  type: string
+                phone:
+                  type: string
+      responses:
+        '201':
+          description: Restaurant created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restaurant'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Slug already taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /restaurants/{restaurantId}:
+    parameters:
+    - name: restaurantId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The restaurant's slug (preferred) or its UUID. Slugs are short and human-friendly —
+        use `nino` for Nino's Pizza and `gino` for Gino's Pizza. Get the full list from `GET /restaurants`.
+      example: nino
+    get:
+      operationId: getRestaurant
+      summary: Get restaurant by ID or slug
+      tags:
+      - Restaurants
+      responses:
+        '200':
+          description: Restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restaurant'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      operationId: updateRestaurant
+      summary: Update restaurant (owner/manager)
+      tags:
+      - Restaurants
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                timezone:
+                  type: string
+                open_hours:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/OpenHour'
+                address:
+                  type: string
+                phone:
+                  type: string
+      responses:
+        '200':
+          description: Updated restaurant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restaurant'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /restaurants/{restaurantId}/tables:
+    parameters:
+    - name: restaurantId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The restaurant's slug (preferred) or its UUID. Slugs are short and human-friendly —
+        use `nino` for Nino's Pizza and `gino` for Gino's Pizza. Get the full list from `GET /restaurants`.
+      example: nino
+    get:
+      operationId: listTables
+      summary: List tables
+      tags:
+      - Tables
+      responses:
+        '200':
+          description: Tables
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableList'
+    post:
+      operationId: createTable
+      summary: Create table (owner/manager)
+      tags:
+      - Tables
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - label
+              - capacity
+              properties:
+                label:
+                  type: string
+                capacity:
+                  type: integer
+                  minimum: 1
+                active:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: Table created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Table label already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /restaurants/{restaurantId}/tables/{tableId}:
+    parameters:
+    - name: restaurantId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The restaurant's slug (preferred) or its UUID. Slugs are short and human-friendly —
+        use `nino` for Nino's Pizza and `gino` for Gino's Pizza. Get the full list from `GET /restaurants`.
+      example: nino
+    - name: tableId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    patch:
+      operationId: updateTable
+      summary: Update table (owner/manager)
+      tags:
+      - Tables
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                capacity:
+                  type: integer
+                  minimum: 1
+                active:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated table
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Table label conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: deleteTable
+      summary: Delete table (owner/manager)
+      tags:
+      - Tables
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /restaurants/{restaurantId}/reservations:
+    parameters:
+    - name: restaurantId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The restaurant's slug (preferred) or its UUID. Slugs are short and human-friendly —
+        use `nino` for Nino's Pizza and `gino` for Gino's Pizza. Get the full list from `GET /restaurants`.
+      example: nino
+    post:
+      operationId: createReservation
+      summary: Create reservation
+      tags:
+      - Reservations
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+        description: Idempotency key — safe to retry with same key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - diner_name
+              - party_size
+              - starts_at
+              properties:
+                table_id:
+                  type: string
+                  format: uuid
+                diner_user_id:
+                  type: string
+                  format: uuid
+                diner_name:
+                  type: string
+                diner_email:
+                  type: string
+                  format: email
+                diner_phone:
+                  type: string
+                party_size:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+                starts_at:
+                  type: string
+                  format: date-time
+                ends_at:
+                  type: string
+                  format: date-time
+                duration_minutes:
+                  type: integer
+                  minimum: 1
+                  default: 90
+                status:
+                  $ref: '#/components/schemas/ReservationStatus'
+                notes:
+                  type: string
+      responses:
+        '201':
+          description: Reservation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '200':
+          description: Idempotency replay — reservation already exists
+          headers:
+            Idempotent-Replay:
+              schema:
+                type: string
+                enum:
+                - 'true'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '400':
+          description: Validation or semantic error (table_too_small, invalid_times)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Table conflict (double-booking)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      operationId: listReservations
+      summary: List reservations
+      tags:
+      - Reservations
+      parameters:
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: status
+        in: query
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservationStatus'
+        style: form
+        explode: true
+      - name: diner_email
+        in: query
+        schema:
+          type: string
+      - name: table_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 50
+          maximum: 200
+      - name: cursor
+        in: query
+        schema:
+          type: string
+        description: base64url cursor from previous response
+      responses:
+        '200':
+          description: Reservation list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationList'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /restaurants/{restaurantId}/reservations/{reservationId}:
+    parameters:
+    - name: restaurantId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The restaurant's slug (preferred) or its UUID. Slugs are short and human-friendly —
+        use `nino` for Nino's Pizza and `gino` for Gino's Pizza. Get the full list from `GET /restaurants`.
+      example: nino
+    - name: reservationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      operationId: getReservation
+      summary: Get reservation
+      tags:
+      - Reservations
+      responses:
+        '200':
+          description: Reservation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      operationId: updateReservation
+      summary: Update reservation
+      tags:
+      - Reservations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                table_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                diner_name:
+                  type: string
+                diner_email:
+                  type: string
+                  format: email
+                diner_phone:
+                  type: string
+                party_size:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+                starts_at:
+                  type: string
+                  format: date-time
+                ends_at:
+                  type: string
+                  format: date-time
+                status:
+                  $ref: '#/components/schemas/ReservationStatus'
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Updated reservation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Table conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: cancelReservation
+      summary: Cancel reservation (soft delete)
+      tags:
+      - Reservations
+      responses:
+        '204':
+          description: Cancelled
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

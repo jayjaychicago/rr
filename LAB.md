@@ -14,13 +14,12 @@ so tenants can mint their own API keys and organise staff into groups, then prov
 an access rule works — a diner sees only their own reservations while reservation
 staff see all of them.
 
-Everything runs on your machine: the API (in Docker), the platform app, and a
+Everything runs on your machine: the API (a tiny Node server), the platform app, and a
 proxy in front of it via APIblaze's localhost tunnel.
 
 ## Requirements
 
 - **Node.js 20+** — <https://nodejs.org>
-- **Docker** — <https://docker.com/get-started>
 - The **APIblaze CLI** — the lab fetches it for you via `npx` on first run; nothing to install.
 - A **free APIblaze account** — the lab opens your browser once to log in (the
   localhost tunnel is an authenticated feature).
@@ -51,7 +50,7 @@ cd rr
 The lab pauses before every step so you can read what's about to happen, then
 runs it:
 
-1. Starts the reservation API in Docker (seeds itself) and waits for it.
+1. Starts the reservation API — a zero-dependency Node server, seeded in memory — and waits for it.
 2. Logs you in to APIblaze (browser) and creates a proxy — **with a unique name
    generated for your run**, so two people doing the lab never collide — pointed
    at your local API, with identity + IAM turned on.
@@ -68,8 +67,7 @@ A few steps need you (they're the point): completing the browser login, signing
 into the app, creating a group in the widget, and typing the rule into the
 authz-agent chat. The lab tells you exactly what to do and waits.
 
-**Cleanup:** the lab stops the app and tunnel when it exits. To stop the API:
-`cd resiresi-backend && docker compose down`.
+**Cleanup:** the lab stops the backend, app and tunnel when it exits.
 
 Prefer to do it by hand? The same steps, explained, live at
 <https://www.apiblaze.com/docs/full-test-project> and inside the app itself at

@@ -9,15 +9,16 @@ A tiny, self-contained restaurant-reservation platform used to try out
 | `nino`              | Nino's Pizza storefront (a ResiResi tenant)  | http://localhost:3001  |
 | `gino`              | Gino's Pizza storefront (a ResiResi tenant)  | http://localhost:3002  |
 
-All three talk to the **reservation API you run locally** — `resiresi-backend`
-ships in this repo and runs in Docker on `http://localhost:8080`, seeding itself
-with restaurants and reservations. It's an open API (no keys of its own) on
-purpose: access control is the gateway's job.
+All three talk to the **reservation API you run locally** — `resiresi-backend-lightweight`
+ships in this repo: a zero-dependency Node server that holds its data in memory
+and runs on `http://localhost:8080` with just `node server.js` (no Docker, no
+database). It's an open API (no keys of its own) on purpose: access control is
+the gateway's job. (`resiresi-backend` is the production-shaped Postgres/Docker
+version, for reference.)
 
 ## Requirements
 
 - **Node.js 20+** (`node -v`)
-- **Docker** (`docker -v`) — for the backend's Postgres + API
 
 ## Fastest path — the guided lab
 
@@ -37,10 +38,10 @@ by hand below.
 git clone https://github.com/jayjaychicago/rr
 ```
 
-The reservation API (start this first — migrations and seed run automatically):
+The reservation API — a zero-dependency Node server (in-memory), start it first:
 
 ```bash
-cd rr/resiresi-backend && docker compose up -d
+cd rr/resiresi-backend-lightweight && node server.js
 ```
 
 ResiResi platform (the main app):

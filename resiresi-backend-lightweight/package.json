@@ -1,0 +1,8 @@
+{
+  "name": "resiresi-backend-lightweight",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zero-dependency, in-memory ResiResi reservation API. Just: node server.js",
+  "scripts": { "start": "node server.js" }
+}

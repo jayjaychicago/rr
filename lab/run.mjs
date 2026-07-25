@@ -7,7 +7,7 @@
  * script drives it on macOS, Linux and Windows alike (Node is already required
  * to run the apps). Launched by ../lab.sh (mac/linux) or ../lab.ps1 (windows).
  *
- * Everything runs on your machine: the reservation API (Docker), the platform
+ * Everything runs on your machine: the reservation API (a tiny Node server), the platform
  * app, and a proxy in front of it via APIblaze's localhost tunnel.
  */
 import { spawn } from "node:child_process";
@@ -19,7 +19,7 @@ import { wireWidgets } from "./wire.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FE = join(ROOT, "resiresi-frontend");
-const BACKEND = join(ROOT, "resiresi-backend");
+const BACKEND_LW = join(ROOT, "resiresi-backend-lightweight");
 const isWin = process.platform === "win32";
 const NPX = isWin ? "npx.cmd" : "npx";
 const NPM = isWin ? "npm.cmd" : "npm";
@@ -107,14 +107,12 @@ const abz = (args, opts) => run(NPX, [...ABZ, ...args], opts);
 const abzCapture = (args, opts) => capture(NPX, [...ABZ, ...args], opts);
 
 async function preflight() {
-  step("Check your tools", "Node 20+, npx and a running Docker are all it needs.");
+  step("Check your tools", "Just Node 20+ and npx — no Docker, no database to install.");
   await pause();
   const major = Number(process.versions.node.split(".")[0]);
   if (major < 20) throw new Error(`Node 20+ required — you have ${process.versions.node}. https://nodejs.org`);
   if (!(await commandOk(NPX, ["--version"]))) throw new Error("npx not found — reinstall Node.js. https://nodejs.org");
-  if (!(await commandOk("docker", ["--version"]))) throw new Error("Docker not found — install it. https://docker.com/get-started");
-  if (!(await commandOk("docker", ["info"]))) throw new Error("Docker is installed but not running — start Docker Desktop, then re-run.");
-  console.log(green(`  Node ${process.versions.node} · npx · Docker (running) ✓`));
+  console.log(green(`  Node ${process.versions.node} · npx ✓`));
   console.log(dim("  Fetching the APIblaze CLI via npx (first time only)…"));
   await run(NPX, ["--yes", "apiblaze@latest", "--version"]);
   console.log(green("  APIblaze CLI ready ✓"));
@@ -138,8 +136,8 @@ async function main() {
     "  Nino's and Gino's. You'll put APIblaze in front of your API so tenants can\n" +
     "  mint keys and manage staff — then prove a diner sees only their own\n" +
     "  reservations while staff see everything. Everything runs on this machine.\n"));
-  console.log(dim("  Requirements: Node 20+, Docker, and a free APIblaze account (one browser\n" +
-    "  login, for the localhost tunnel). Ctrl-C any time; re-run to resume.\n"));
+  console.log(dim("  Requirements: Node 20+ and a free APIblaze account (one browser login,\n" +
+    "  for the localhost tunnel). Ctrl-C any time; re-run to resume.\n"));
 
   await preflight();
 
@@ -151,13 +149,11 @@ async function main() {
   await pause("Press Enter to begin");
 
   // 1 · backend
-  step("Start the reservation API (Docker)",
-    "The backend (Node + Postgres) ships in this repo. Docker runs it on\n" +
-    "http://localhost:8080 and seeds it with restaurants and reservations.");
+  step("Start the reservation API",
+    "A zero-dependency Node server, seeded in memory. Runs in the background on\n" +
+    "http://localhost:8080 — no Docker, no database to install.");
   await pause();
-  const compose = ["compose", "up", "-d"];
-  try { await run("docker", compose, { cwd: BACKEND }); }
-  catch { await run("docker-compose", ["up", "-d"], { cwd: BACKEND }); }
+  startBg(process.execPath, [join(BACKEND_LW, "server.js")], { env: { ...process.env, PORT: "8080" } });
   process.stdout.write(dim("  waiting for http://localhost:8080/healthz "));
   await waitFor(async () => {
     const r = await httpOk("http://localhost:8080/healthz"); process.stdout.write(dim("."));
@@ -302,8 +298,7 @@ async function main() {
   }
 
   console.log(bold(green("\n  ✓ Lab complete — one key, many people, per-person results.\n")));
-  console.log(dim("  Cleanup: this script stops the app + tunnel on exit. To stop the backend:\n" +
-    "    cd resiresi-backend && docker compose down\n"));
+  console.log(dim("  Cleanup: this script stops the backend, app and tunnel when it exits.\n"));
   rl.close();
 }
 

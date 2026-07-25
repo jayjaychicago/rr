@@ -25,14 +25,15 @@ function Step({
 const PROMPT = `Set up and verify a demo that puts APIblaze in front of a locally-run
 restaurant reservation API (ResiResi) and adds per-user access control. Run
 everything on this machine and tell me the result of each step and anything
-that fails. Requirements: Node 20+, Docker, and an APIblaze account (the
+that fails. Requirements: Node 20+ and an APIblaze account (the
 localhost tunnel needs login — I will complete the browser login when prompted).
 
-1. Clone and start the backend (Postgres + API on http://localhost:8080):
+1. Clone and start the backend (a zero-dependency Node server, in-memory, on
+   http://localhost:8080). Leave it running in its own terminal:
      git clone ${REPO_URL}
-     cd rr/resiresi-backend
-     docker compose up -d
-   Verify: curl http://localhost:8080/healthz returns {"status":"ok","db":"ok"}.
+     cd rr/resiresi-backend-lightweight
+     node server.js
+   Verify (new terminal): curl http://localhost:8080/healthz -> {"status":"ok","db":"ok"}.
 
 2. Log in to APIblaze (opens a browser; I'll complete it), then create the proxy
    pointing at the local backend:
@@ -115,7 +116,7 @@ export function ImplementationGuide() {
       <section className="card border-slate-300 p-6">
         <h3 className="text-base font-semibold">Prefer to watch it run? Paste this into Claude Code</h3>
         <p className="mt-1 text-sm text-slate-600">
-          On a machine with Node 20+, Docker and{" "}
+          On a machine with Node 20+ and{" "}
           <a href="https://claude.com/claude-code" className="text-brand-600 underline" target="_blank" rel="noreferrer">Claude Code</a>,
           paste the whole block below. It runs the entire exercise — backend, proxy,
           tunnel, widgets, access rule — and reports anything that fails. You&apos;ll
@@ -149,8 +150,7 @@ export function ImplementationGuide() {
         </p>
         <p className="mt-3 text-xs text-slate-500">
           You&apos;ll need: Node 20+ (<span className="font-mono">node -v</span>),
-          Docker (<span className="font-mono">docker -v</span>), and a free APIblaze
-          account (the localhost tunnel in Part B requires login).
+          and a free APIblaze account (the localhost tunnel in Part B requires login).
         </p>
       </section>
 
@@ -159,12 +159,12 @@ export function ImplementationGuide() {
         <h3 className="text-base font-semibold">Part A · Run ResiResi on your laptop</h3>
 
         <Step n="A1" title="Clone the project and start the reservation API">
-          The backend (Node + Postgres) runs in Docker and seeds itself with
+          A tiny Node server (zero dependencies, data in memory) seeded with
           restaurants and reservations on{" "}
           <span className="font-mono text-xs">http://localhost:8080</span>.
-          <Code label="your laptop — terminal">{`git clone ${REPO_URL}
-cd rr/resiresi-backend
-docker compose up -d`}</Code>
+          <Code label="your laptop — terminal (leave this running)">{`git clone ${REPO_URL}
+cd rr/resiresi-backend-lightweight
+node server.js`}</Code>
           Check it&apos;s alive:
           <Code label="your laptop — terminal">{`curl http://localhost:8080/healthz`}</Code>
         </Step>
