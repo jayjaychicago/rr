@@ -91,6 +91,35 @@ async function httpOk(url, headers = {}) {
   return r.ok ? r : null;
 }
 
+/** True if `cmd args` runs and exits 0. Used for presence + daemon checks. */
+function commandOk(cmd, args) {
+  return new Promise((res) => {
+    const p = spawn(cmd, args, { stdio: "ignore", shell: isWin });
+    p.on("error", () => res(false));
+    p.on("close", (code) => res(code === 0));
+  });
+}
+
+// Every APIblaze call goes through npx with --yes, so npx fetches the CLI once
+// (first use) WITHOUT its interactive "Ok to proceed?" prompt, then reuses it.
+const ABZ = ["--yes", "apiblaze@latest"];
+const abz = (args, opts) => run(NPX, [...ABZ, ...args], opts);
+const abzCapture = (args, opts) => capture(NPX, [...ABZ, ...args], opts);
+
+async function preflight() {
+  step("Check your tools", "Node 20+, npx and a running Docker are all it needs.");
+  await pause();
+  const major = Number(process.versions.node.split(".")[0]);
+  if (major < 20) throw new Error(`Node 20+ required — you have ${process.versions.node}. https://nodejs.org`);
+  if (!(await commandOk(NPX, ["--version"]))) throw new Error("npx not found — reinstall Node.js. https://nodejs.org");
+  if (!(await commandOk("docker", ["--version"]))) throw new Error("Docker not found — install it. https://docker.com/get-started");
+  if (!(await commandOk("docker", ["info"]))) throw new Error("Docker is installed but not running — start Docker Desktop, then re-run.");
+  console.log(green(`  Node ${process.versions.node} · npx · Docker (running) ✓`));
+  console.log(dim("  Fetching the APIblaze CLI via npx (first time only)…"));
+  await run(NPX, ["--yes", "apiblaze@latest", "--version"]);
+  console.log(green("  APIblaze CLI ready ✓"));
+}
+
 // ── lab state (so the same suffix is reused across a run) ────────────────────
 const STATE = join(ROOT, "lab", ".state.json");
 function loadState() { try { return JSON.parse(readFileSync(STATE, "utf8")); } catch { return {}; } }
@@ -111,6 +140,8 @@ async function main() {
     "  reservations while staff see everything. Everything runs on this machine.\n"));
   console.log(dim("  Requirements: Node 20+, Docker, and a free APIblaze account (one browser\n" +
     "  login, for the localhost tunnel). Ctrl-C any time; re-run to resume.\n"));
+
+  await preflight();
 
   const state = loadState();
   const PROXY = state.proxy || ("resiresi" + newSuffix());
@@ -139,14 +170,14 @@ async function main() {
     "The next step tunnels your localhost to a public proxy URL — an\n" +
     "authenticated feature, so log in (opens your browser).");
   await pause();
-  await run(NPX, ["apiblaze", "login"]);
+  await abz(["login"]);
 
   // 3 · create proxy
   step("Create the proxy in front of your local API",
     `--identified makes every call name the person it's for (X-End-User-Id);\n` +
     `--iam makes users & groups apply. Named ${PROXY} so it won't collide.`);
   await pause();
-  const cj = await capture(NPX, ["apiblaze", "create", "--name", PROXY,
+  const cj = await abzCapture(["create", "--name", PROXY,
     "--target", "http://localhost:8080", "--auth", "api_key", "--identified", "--iam", "--json"]);
   const created = JSON.parse(cj.slice(cj.indexOf("{"), cj.lastIndexOf("}") + 1));
   const projectId = created.project_id || PROXY;
@@ -160,7 +191,7 @@ async function main() {
     "This bridges your cloud proxy to the backend on your laptop. It runs in the\n" +
     "background for the rest of the lab.");
   await pause();
-  startBg(NPX, ["apiblaze", "dev", "8080"]);
+  startBg(NPX, [...ABZ, "dev", "8080"]);
   process.stdout.write(dim("  connecting the tunnel "));
   await waitFor(async () => {
     process.stdout.write(dim("."));
@@ -186,7 +217,7 @@ async function main() {
     "A scoped manager key {call, configure, issue-keys} — not a full admin key.\n" +
     "It powers the two widgets, server-side. Shown once.");
   await pause();
-  const mj = await capture(NPX, ["apiblaze", "apikeys", "mint", "--desc", "resiresi widget key", "--json"]);
+  const mj = await abzCapture(["apikeys", "mint", "--desc", "resiresi widget key", "--json"]);
   const CPKEY = JSON.parse(mj.slice(mj.indexOf("{"), mj.lastIndexOf("}") + 1)).key;
   state.cpkey = CPKEY; saveState(state);
 
@@ -230,7 +261,7 @@ async function main() {
     "You hold the control-plane key, so you seed the first admin from here.\n" +
     "Then the widget lets you manage staff.");
   await pause();
-  await run(NPX, ["apiblaze", "admins", "add", "owner@nino.com", "--tenant", "nino"]);
+  await abz(["admins", "add", "owner@nino.com", "--tenant", "nino"]);
   console.log(dim("  Reload the Users & Groups widget — it flips from pending to ready."));
 
   // 12 · BEFORE
@@ -257,7 +288,7 @@ async function main() {
     '  are in the "reservationists" group, who can see all of them.') + "\n\n" +
     dim("  Then type /enable (or follow the agent's prompt) and exit the chat."));
   await pause("Press Enter to open the agent");
-  await run(NPX, ["apiblaze", "agent", "authz", PROXY]);
+  await abz(["agent", "authz", PROXY]);
 
   // 15 · AFTER
   step("AFTER — the rule in action",

@@ -21,6 +21,7 @@ proxy in front of it via APIblaze's localhost tunnel.
 
 - **Node.js 20+** — <https://nodejs.org>
 - **Docker** — <https://docker.com/get-started>
+- The **APIblaze CLI** — the lab fetches it for you via `npx` on first run; nothing to install.
 - A **free APIblaze account** — the lab opens your browser once to log in (the
   localhost tunnel is an authenticated feature).
 

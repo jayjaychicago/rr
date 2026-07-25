@@ -10,6 +10,7 @@ function Need($cmd, $hint) {
   }
 }
 Need node "https://nodejs.org"
+Need npx "https://nodejs.org"
 Need docker "https://docker.com/get-started"
 
 # ANSI colors render in Windows Terminal / PowerShell 7.
