@@ -405,13 +405,12 @@ async function main() {
   // 13 · human: make the group
   step("Put staff in a group",
     "In the Users & Groups widget, three quick things:\n" +
-    "  1. Click " + bold("+ New user") + " and add  " + bold("maria@nino.com") + "  — an email is\n" +
-    "     pre-approved, so she becomes staff you can manage (John stays just a diner).\n" +
+    "  1. Click " + bold("+ New user") + " and add  " + bold("maria@nino.com") + "  — she becomes\n" +
+    "     staff you can manage right away (John stays just a diner).\n" +
     "  2. Click " + bold("+ New group") + " and name it  " + bold("reservationists") + " .\n" +
-    "  3. In that group's member box, start typing  maria  and pick her from the\n" +
-    "     list, then Add.\n" +
-    dim("  (Step 1 first is what makes Maria show up in step 3 — a brand-new email\n" +
-    "  only appears in the member search once she's been added as a user.)"));
+    "  3. In that group's member box, type  maria , pick her, and Add.\n" +
+    dim("  (Add Maria first so she exists to be grouped — she shows up in the member\n" +
+    "  search as soon as you've added her.)"));
   await pause("Do that in the widget, then press Enter");
 
   // 14 · agent authz
