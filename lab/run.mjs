@@ -43,6 +43,28 @@ function pause(msg = "Press Enter to run this step", cmd) {
 // command the user would type, minus only the machine-only --json flag.
 const abzDisplay = (args) => "npx apiblaze " + args.filter((a) => a !== "--json").join(" ");
 
+// Render a reservations list as a compact, readable table instead of a bare
+// count — so the user can actually SEE whose reservations came back (the whole
+// point of the before/after). `highlight` bolds rows belonging to one diner.
+const fmtWhen = (iso) => {
+  try {
+    return new Date(iso).toLocaleString("en-US",
+      { weekday: "short", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+  } catch { return iso || "—"; }
+};
+function printReservations(rows, highlight) {
+  if (!rows || !rows.length) { console.log(dim("    (none)")); return; }
+  for (const r of rows) {
+    const who = r.diner_name || r.diner_external_id || "—";
+    const email = r.diner_external_id || r.diner_email || "";
+    const line = "    " + fmtWhen(r.starts_at).padEnd(22) +
+      "  " + String(r.status || "").padEnd(9) +
+      "  party " + String(r.party_size ?? "?").padEnd(2) +
+      "  " + who + (email ? "  <" + email + ">" : "");
+    console.log(highlight && email === highlight ? green(line) : dim(line));
+  }
+}
+
 let N = 0;
 function step(title, explain) {
   N++;
@@ -116,7 +138,7 @@ function commandOk(cmd, args) {
 // Pinned to an exact version (not @latest) so npx installs it ONCE and then runs
 // straight from cache on every later call — no per-command registry round-trip,
 // no repeated prompts, and the lab always runs the version it was written for.
-const ABZ = ["--yes", "apiblaze@0.19.3"];
+const ABZ = ["--yes", "apiblaze@0.19.4"];
 const abz = (args, opts) => run(NPX, [...ABZ, ...args], opts);
 const abzCapture = (args, opts) => capture(NPX, [...ABZ, ...args], opts);
 
@@ -271,15 +293,21 @@ async function main() {
   console.log(green("  tunnel up ✓"));
 
   // 5 · smoke test
+  const smokeCurl =
+    `curl "${PROD}/v1/restaurants/nino/reservations" \\\n` +
+    `  -H "X-API-Key: ${DPKEY}" \\\n` +
+    `  -H "X-End-User-Id: john@nino.com"`;
   step("Prove the proxy reaches your machine",
-    "Same call a storefront makes: the app key says WHICH APP; X-End-User-Id\n" +
-    "says WHICH PERSON. Served from your local backend, through your proxy.");
-  await pause();
-  console.log(dim(`$ curl "${PROD}/v1/restaurants/nino/reservations" -H "X-API-Key: ${DPKEY.slice(0, 12)}…" -H "X-End-User-Id: john@nino.com"`));
+    "This is the exact call a storefront makes: the API key says WHICH APP;\n" +
+    "X-End-User-Id says WHICH PERSON. It hits the public proxy URL, which the\n" +
+    "tunnel forwards to the backend on your machine. Copy-paste it yourself too —\n" +
+    "it's a real, runnable request.");
+  await pause("Press Enter to run this step", smokeCurl);
   {
     const r = await httpOk(`${PROD}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
     const d = await r.json();
-    console.log(green(`  ✓ ${d.data.length} reservations returned`));
+    console.log(green(`  ✓ ${d.data.length} reservations returned:`));
+    printReservations(d.data);
   }
 
   // 6 · widget key
@@ -301,9 +329,11 @@ async function main() {
   }
 
   // 7 · frontend deps + env
-  step("Install the platform app + drop in the key",
-    "The app defaults to your local backend; the only secret it needs is the\n" +
-    "widget key (stays server-side, never reaches the browser).");
+  step("Install ResiResi's web app + drop in the key",
+    "This is ResiResi's own website — where diners and staff sign in and manage\n" +
+    "reservations. It's a normal Next.js app in this repo. We install it, plus the\n" +
+    "apiblaze package for its widgets, and give it the widget key (which stays on\n" +
+    "the server, never in the browser).");
   await pause("Press Enter to run this step", "cd resiresi-frontend && npm install && npm install apiblaze");
   await run(NPM, ["install"], { cwd: FE });
   await run(NPM, ["install", "apiblaze"], { cwd: FE });
@@ -311,16 +341,21 @@ async function main() {
   console.log(green("  wrote resiresi-frontend/.env.local ✓"));
 
   // 8 · wire widgets
-  step("Wire the two widgets into the Developers page",
-    "Creating lib/apiblaze-user.ts + two API routes (they hold the key), and\n" +
-    "mounting <ApiKeyWidget/> and <UsersGroupsWidget/> on app/developers/page.tsx.");
-  await pause();
+  step("Add the two widgets to ResiResi's Developers page",
+    "This edits only files inside rr/resiresi-frontend/ — nothing elsewhere on\n" +
+    "your computer. It creates:\n" +
+    "  • rr/resiresi-frontend/lib/apiblaze-user.ts\n" +
+    "  • rr/resiresi-frontend/app/api/apiblaze/keys/route.ts\n" +
+    "  • rr/resiresi-frontend/app/api/apiblaze/groups/route.ts\n" +
+    "(the two routes keep the widget key on the server), then mounts the API-key\n" +
+    "and Users & Groups widgets in rr/resiresi-frontend/app/developers/page.tsx.");
+  await pause("Press Enter to run this step");
   wireWidgets(FE);
   console.log(green("  3 files created + widgets mounted ✓"));
 
   // 9 · dev server
-  step("Start the platform app",
-    "Runs ResiResi's app on http://localhost:3003 in the background.");
+  step("Start ResiResi's web app",
+    "Runs ResiResi's website on http://localhost:3003 in the background.");
   await pause("Press Enter to run this step", "cd resiresi-frontend && npm run dev");
   startBg(NPM, ["run", "dev"], { cwd: FE, env: { ...process.env, APIBLAZE_CP_KEY: CPKEY } });
   process.stdout.write(dim("  starting http://localhost:3003 "));
@@ -330,34 +365,53 @@ async function main() {
 
   // 10 · human: open + sign in
   step("Open the app and sign in",
-    "In your browser open  http://localhost:3003/developers  and sign in with any\n" +
-    "name and the email  owner@nino.com . Both widgets appear; Users & Groups will\n" +
-    "say “admin access pending” (the admin list is sealed from inside the widget).");
-  await pause("Do that, then press Enter");
+    "You'll sign in to ResiResi's app as its owner. Pick the email you'll use —\n" +
+    "the default is fine, or use your own; you just have to sign in with the SAME\n" +
+    "one so the next step can make it the admin.");
+  const defaultEmail = state.ownerEmail || "owner@nino.com";
+  const answer = (await ask(`\n${cyan("▸ Email you'll sign in as")} ${dim("[" + defaultEmail + "]")}: `)).trim();
+  const OWNER = answer || defaultEmail;
+  state.ownerEmail = OWNER; saveState(state);
+  console.log(dim(`\n  Now open  http://localhost:3003/developers  and sign in with any name and\n` +
+    `  the email  ${OWNER} . Both widgets appear; Users & Groups will say “admin\n` +
+    `  access pending” (the admin list is sealed from inside the widget).`));
+  await pause("Signed in? Press Enter");
 
   // 11 · crown admin
   step("Crown yourself the first admin",
-    "You hold the manager key, so you name the very first admin from here. After\n" +
-    "this, the Users & Groups widget lets that admin manage everyone else.");
-  const adminArgs = ["admins", "add", "owner@nino.com", "--tenant", "nino"];
+    `You hold the manager key, so you name the very first admin (${OWNER}) from\n` +
+    "here. After this, the Users & Groups widget lets that admin manage everyone else.");
+  const adminArgs = ["admins", "add", OWNER, "--tenant", "nino"];
   await pause("Press Enter to run this step", abzDisplay(adminArgs));
   await abz(adminArgs);
   console.log(dim("  Reload the Users & Groups widget — it flips from pending to ready."));
 
   // 12 · BEFORE
+  const curlFor = (email) =>
+    `curl "${PROD}/v1/restaurants/nino/reservations" \\\n` +
+    `  -H "X-API-Key: ${DPKEY}" \\\n` +
+    `  -H "X-End-User-Id: ${email}"`;
   step("BEFORE — John can see everyone's reservations",
-    "Right now any caller with Nino's key reads every reservation. That's the bug.");
-  await pause();
+    "Right now any caller with Nino's key reads every reservation. That's the bug.\n" +
+    "This is John's own call — note how much he can see.");
+  await pause("Press Enter to run this step", curlFor("john@nino.com"));
   {
     const r = await httpOk(`${PROD}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
     const d = await r.json();
-    console.log(yellow(`  John sees ${d.data.length} reservations — including other diners'. Not right.`));
+    console.log(yellow(`  John sees ${d.data.length} reservations — his own are highlighted; the rest are other diners'. Not right.`));
+    printReservations(d.data, "john@nino.com");
   }
 
   // 13 · human: make the group
   step("Put staff in a group",
-    "In the Users & Groups widget: create a group called  reservationists  and add\n" +
-    "the member  maria@nino.com . She's staff; John is just a diner.");
+    "In the Users & Groups widget, three quick things:\n" +
+    "  1. Click " + bold("+ New user") + " and add  " + bold("maria@nino.com") + "  — an email is\n" +
+    "     pre-approved, so she becomes staff you can manage (John stays just a diner).\n" +
+    "  2. Click " + bold("+ New group") + " and name it  " + bold("reservationists") + " .\n" +
+    "  3. In that group's member box, start typing  maria  and pick her from the\n" +
+    "     list, then Add.\n" +
+    dim("  (Step 1 first is what makes Maria show up in step 3 — a brand-new email\n" +
+    "  only appears in the member search once she's been added as a user.)"));
   await pause("Do that in the widget, then press Enter");
 
   // 14 · agent authz
@@ -372,13 +426,17 @@ async function main() {
 
   // 15 · AFTER
   step("AFTER — the rule in action",
-    "Same key, same endpoint — the PERSON and their GROUP now decide the result.");
-  await pause();
+    "Same key, same endpoint — the PERSON and their GROUP now decide the result.\n" +
+    "We run John's call and Maria's call back to back so you can compare.");
+  await pause("Press Enter to run this step",
+    curlFor("john@nino.com") + "\n\n" + curlFor("maria@nino.com"));
   {
     const j = await (await httpOk(`${PROD}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" })).json();
     const m = await (await httpOk(`${PROD}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "maria@nino.com" })).json();
-    console.log(green(`  John (diner):          ${j.data.length} reservations — only his own`));
-    console.log(green(`  Maria (reservationist): ${m.data.length} reservations — all of them`));
+    console.log(green(`\n  John (diner) — ${j.data.length} reservations, only his own:`));
+    printReservations(j.data, "john@nino.com");
+    console.log(green(`\n  Maria (reservationist) — ${m.data.length} reservations, all of them:`));
+    printReservations(m.data, "john@nino.com");
   }
 
   console.log(bold(green("\n  ✓ Lab complete — one key, many people, per-person results.\n")));
