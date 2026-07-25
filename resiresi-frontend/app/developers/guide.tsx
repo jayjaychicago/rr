@@ -1,4 +1,4 @@
-import { EC2, PROXY_NAME } from "@/lib/study-config";
+import { REPO_URL, PROXY_NAME } from "@/lib/study-config";
 
 function Code({ label, children }: { label?: string; children: string }) {
   return (
@@ -40,11 +40,94 @@ function Step({
 }
 
 export function ImplementationGuide() {
-  const sshKey = `~/.ssh/${EC2.keyFile}`;
-  const sshTarget = `${EC2.user}@${EC2.host}`;
-
   return (
     <div className="space-y-8">
+      {/* ---------- PROMPT (automated path) ---------- */}
+      <section className="card border-slate-300 p-6">
+        <h3 className="text-base font-semibold">Prefer to watch it run? Paste this into Claude Code</h3>
+        <p className="mt-1 text-sm text-slate-600">
+          On a fresh machine with Node 20+ and{" "}
+          <a href="https://claude.com/claude-code" className="text-brand-600 underline" target="_blank" rel="noreferrer">Claude Code</a>{" "}
+          installed, paste the whole block below. It does the entire exercise —
+          creates the proxy, clones and runs the apps, wires the widgets, and proves
+          the access rule — reporting anything that fails. No APIblaze account needed.
+        </p>
+        <Code label="paste into Claude Code">{`Set up and verify a demo that puts APIblaze in front of an open restaurant
+reservation API (ResiResi) and adds per-user access control. Run everything on
+this machine and tell me the result of each step and anything that fails. No
+APIblaze login/account is needed. Node 20+ required.
+
+1. Create an anonymous APIblaze proxy (no login) and capture the JSON:
+     npx apiblaze create --name resiresi-demo --target https://backend.resiresi.com --auth api_key --iam --json
+   From the output note: PROD = the endpoint ending in /prod (it's on *.tryabz.run),
+   and DPKEY = api_keys.prod (a data-plane key). If the name is taken, add digits.
+
+2. Smoke-test the proxy. The real API path is /v1/..., and send an end-user id:
+     curl "$PROD/v1/restaurants/nino/reservations" -H "X-API-Key: $DPKEY" -H "X-End-User-Id: john@nino.com"
+   Expect HTTP 200 and a JSON list of reservations.
+
+3. Mint the widget control-plane key (still no login); save it as CPKEY:
+     npx apiblaze apikeys mint --desc "resiresi widget key"
+
+4. Clone and run the platform app:
+     git clone https://github.com/jayjaychicago/rr
+     cd rr/resiresi-frontend && npm install && npm install apiblaze
+   Create rr/resiresi-frontend/.env.local containing:
+     RESIRESI_API_URL=https://backend.resiresi.com
+     APIBLAZE_CP_KEY=<CPKEY from step 3>
+
+5. Wire the two widgets (create these three files, then mount the widgets):
+   FILE lib/apiblaze-user.ts:
+     import type { AppUser } from "apiblaze/server";
+     import { getTenantSlug } from "./tenant";
+     import { getUser } from "./user";
+     export function getApiblazeUser(): AppUser | null {
+       const tenant = getTenantSlug();
+       const user = getUser();
+       if (!tenant || !user) return null;
+       return { tenant, userId: user.email, email: user.email };
+     }
+   FILE app/api/apiblaze/keys/route.ts:
+     import { NextResponse } from "next/server";
+     import { createApiblazeKeys } from "apiblaze/server";
+     import { getApiblazeUser } from "@/lib/apiblaze-user";
+     let k: ReturnType<typeof createApiblazeKeys> | null = null;
+     function handler(req: Request) {
+       const cpKey = process.env.APIBLAZE_CP_KEY;
+       if (!cpKey) return NextResponse.json({ error: "APIBLAZE_CP_KEY not set" }, { status: 503 });
+       k ??= createApiblazeKeys({ cpKey, getUser: () => getApiblazeUser() });
+       return k.handler(req);
+     }
+     export const GET = handler; export const POST = handler;
+   FILE app/api/apiblaze/groups/route.ts: same as keys/route.ts but import
+   createApiblazeGroups and use it instead of createApiblazeKeys.
+   EDIT app/developers/page.tsx: add at top
+     import { ApiKeyWidget, UsersGroupsWidget } from "apiblaze/react";
+   and replace the two <Placeholder>…</Placeholder> blocks with
+     <ApiKeyWidget title="API keys" theme={{ accent: "#4f46e5" }} />
+     <UsersGroupsWidget title="Your staff" theme={{ accent: "#4f46e5" }} />
+
+6. Start it: npm run dev  (serves http://localhost:3003). Open
+   http://localhost:3003/developers, sign in with any name + email, and confirm
+   both widgets load. If Users & Groups says "admin access pending", add your own
+   email as an admin from inside the widget, then reload.
+
+7. Prove per-user access control:
+   BEFORE — curl as john@nino.com (step 2 command) returns ALL reservations.
+   In the Users & Groups widget, create a group "reservationists" and add
+   maria@nino.com. Then set the rule:
+     npx apiblaze agent authz resiresi-demo
+   and tell it: "On GET /restaurants/{restaurantId}/reservations a caller sees only
+   reservations whose diner_external_id equals their X-End-User-Id, unless they are
+   in the reservationists group, who see all."
+   AFTER — curl as john@nino.com returns only John's; as maria@nino.com returns all.
+
+Report each step's outcome.`}</Code>
+        <p className="mt-3 text-xs text-slate-400">
+          Or do it by hand — the same steps, explained, are below.
+        </p>
+      </section>
+
       {/* ---------- THE EXERCISE ---------- */}
       <section className="card border-brand-200 bg-brand-50/40 p-6">
         <h3 className="text-base font-semibold">The exercise</h3>
@@ -72,31 +155,35 @@ export function ImplementationGuide() {
         <h3 className="text-base font-semibold">Part A · Create your APIblaze proxy</h3>
         <p className="mt-1 text-sm text-slate-600">
           Do this first, on your own laptop. It puts APIblaze in front of the open
-          reservation API and gives you the one key the widgets need. You&apos;ll need
-          Node.js installed (<span className="font-mono text-xs">node -v</span>).
+          reservation API and gives you the one key the widgets need — <strong>no
+          account or login required</strong>. You&apos;ll need Node.js installed
+          (<span className="font-mono text-xs">node -v</span>).
         </p>
 
-        <Step n="A1" title="Log in to APIblaze">
-          Opens a browser to sign in (or create an account). Log in first so the proxy
-          and key you make next belong to your account (skip it and you&apos;d get an
-          anonymous proxy to claim later — and step A3 needs an account anyway).
-          <Code label="your laptop — terminal">{`npx apiblaze login`}</Code>
-        </Step>
-
-        <Step n="A2" title="Create the proxy for the reservation API">
-          Points a new proxy at the ResiResi backend.{" "}
+        <Step n="A1" title="Create the proxy for the reservation API">
+          No login — this spins up an anonymous workspace and points a proxy at the
+          ResiResi backend.{" "}
           <span className="font-mono text-xs">--auth api_key</span> makes the keys the
           widget issues usable as an <span className="font-mono text-xs">X-API-Key</span>{" "}
           header. <span className="font-mono text-xs">--identified</span> means every
           call must also say which person it&apos;s for (the storefronts send{" "}
           <span className="font-mono text-xs">X-End-User-Id</span>);{" "}
           <span className="font-mono text-xs">--iam</span> makes your users &amp;
-          groups actually apply to those calls. It prints your proxy URL and a dev
-          portal link.
+          groups actually apply to those calls. It prints your proxy URL and a claim
+          link — you can <span className="font-mono text-xs">npx apiblaze login</span>{" "}
+          and claim the workspace later if you want to keep it, but you don&apos;t need
+          to for this exercise.
+                    <p className="mt-2 text-xs text-slate-400">
+            Copy the <span className="font-mono">/prod</span> URL it prints (on{" "}
+            <span className="font-mono">*.tryabz.run</span>) — if the name{" "}
+            <span className="font-mono">{PROXY_NAME}</span> was taken, yours will have
+            a few digits added. Use your actual URL wherever the steps below show{" "}
+            <span className="font-mono">{PROXY_NAME}.tryabz.run</span>.
+          </p>
           <Code label="your laptop — terminal">{`npx apiblaze create --name ${PROXY_NAME} --target https://backend.resiresi.com --auth api_key --identified --iam`}</Code>
         </Step>
 
-        <Step n="A3" title="Try it — chat with your API">
+        <Step n="A2" title="Try it — chat with your API">
           Before wiring anything up, prove the proxy works by talking to it in plain
           English. This drops you into a chat that can actually call the reservation
           API.
@@ -108,11 +195,12 @@ Add a reservation for 2 people at ${PROXY_NAME} tomorrow at 7pm for "Alex Rivera
 List the reservations for ${PROXY_NAME} again`}</Code>
         </Step>
 
-        <Step n="A4" title="Mint the key the widgets will use">
-          This mints a scoped <strong>widget</strong> key — a manager credential with
-          exactly {`{call, configure, issue-keys}`}, enough to provision users and issue
-          keys but <em>not</em> a full owner/admin key. That&apos;s the right key to
-          hand a website. It&apos;s shown <strong>once</strong> — copy the{" "}
+        <Step n="A3" title="Mint the key the widgets will use">
+          Still no login — this runs against the anonymous workspace you just made. It
+          mints a scoped <strong>widget</strong> key — a manager credential with exactly{" "}
+          {`{call, configure, issue-keys}`}, enough to provision users and issue keys but{" "}
+          <em>not</em> a full owner/admin key. That&apos;s the right key to hand a
+          website. It&apos;s shown <strong>once</strong> — copy the{" "}
           <span className="font-mono text-xs">key:</span> value; it&apos;s your{" "}
           <span className="font-mono text-xs">APIBLAZE_CP_KEY</span> for Part B.
           <Code label="your laptop — terminal">{`npx apiblaze apikeys mint --desc "resiresi widget key"`}</Code>
@@ -121,41 +209,38 @@ List the reservations for ${PROXY_NAME} again`}</Code>
 
       {/* ---------- PART B ---------- */}
       <section className="card p-6">
-        <h3 className="text-base font-semibold">Part B · Add the code on the server</h3>
+        <h3 className="text-base font-semibold">Part B · Add the code, on your laptop</h3>
         <p className="mt-1 text-sm text-slate-600">
-          You were given one file — an SSH key called{" "}
-          <span className="font-mono text-xs">{EC2.keyFile}</span>. Everything below
-          uses it.
+          Everything runs locally — no server, no SSH. You&apos;ll need Node.js 20+
+          (<span className="font-mono text-xs">node -v</span>).
         </p>
 
-        <Step n="B1" title="Save the key and connect">
-          Lock the key down first — SSH refuses a key that others could read. (The
-          login user is <span className="font-mono text-xs">ubuntu</span> on Ubuntu
-          servers, <span className="font-mono text-xs">ec2-user</span> on Amazon Linux.)
-          <Code label="your laptop — terminal">{`mv ~/Downloads/${EC2.keyFile} ~/.ssh/
-chmod 400 ${sshKey}
-
-ssh -i ${sshKey} ${sshTarget}`}</Code>
+        <Step n="B1" title="Clone the project and start it">
+          Grab the code and run ResiResi on your machine. It comes up at{" "}
+          <span className="font-mono text-xs">http://localhost:3003</span> and talks to
+          the live open backend — no config needed.
+          <Code label="your laptop — terminal">{`git clone ${REPO_URL}
+cd rr/resiresi-frontend
+npm install
+npm run dev        # → http://localhost:3003`}</Code>
         </Step>
 
-        <Step n="B2" title="Open the project">
-          You&apos;re now on the server. Go to the app and confirm a clean checkout.
-          <Code label={`${sshTarget} — terminal`}>{`cd ${EC2.dir}
-git status`}</Code>
+        <Step n="B2" title="Install the APIblaze SDK">
+          In a second terminal, still in{" "}
+          <span className="font-mono text-xs">rr/resiresi-frontend</span>:
+          <Code label="your laptop — terminal">{`npm install apiblaze`}</Code>
         </Step>
 
-        <Step n="B3" title="Install the APIblaze SDK">
-          <Code label={`${sshTarget} — terminal`}>{`npm install apiblaze`}</Code>
+        <Step n="B3" title="Add your key">
+          Create <span className="font-mono text-xs">.env.local</span> in{" "}
+          <span className="font-mono text-xs">rr/resiresi-frontend</span> and paste the
+          key from step A3. It stays on your machine and is never sent to the browser.
+          Restart <span className="font-mono text-xs">npm run dev</span> after saving.
+          <Code label="rr/resiresi-frontend/.env.local">{`RESIRESI_API_URL=https://backend.resiresi.com
+APIBLAZE_CP_KEY=paste-the-key-from-step-A3-here`}</Code>
         </Step>
 
-        <Step n="B4" title="Add your key">
-          Paste the key from step A4. It stays on the server and is never sent to the
-          browser.
-          <Code label=".env.local">{`RESIRESI_API_URL=https://backend.resiresi.com
-APIBLAZE_CP_KEY=paste-the-key-from-step-A4-here`}</Code>
-        </Step>
-
-        <Step n="B5" title="Tell APIblaze who is logged in">
+        <Step n="B4" title="Tell APIblaze who is logged in">
           Create this file. It turns the signed-in restaurant + email into the identity
           APIblaze authorizes on. Create the folder if needed:{" "}
           <span className="font-mono text-xs">mkdir -p lib</span>.
@@ -171,7 +256,7 @@ export function getApiblazeUser(): AppUser | null {
 }`}</Code>
         </Step>
 
-        <Step n="B6" title="Add the two backend routes">
+        <Step n="B5" title="Add the two backend routes">
           These are the only things that hold the key. The browser widgets talk to
           these routes; the routes talk to APIblaze.
           <Code label="app/api/apiblaze/keys/route.ts">{`import { NextResponse } from "next/server";
@@ -210,7 +295,7 @@ export const GET = handler;
 export const POST = handler;`}</Code>
         </Step>
 
-        <Step n="B7" title="Drop the widgets onto this page">
+        <Step n="B6" title="Drop the widgets onto this page">
           Open <span className="font-mono text-xs">app/developers/page.tsx</span>. Add the
           import at the top, then replace each dotted placeholder with its widget.
           <Code label="app/developers/page.tsx — add at the top">{`import { ApiKeyWidget, UsersGroupsWidget } from "apiblaze/react";`}</Code>
@@ -224,20 +309,14 @@ export const POST = handler;`}</Code>
 
       {/* ---------- PART C ---------- */}
       <section className="card p-6">
-        <h3 className="text-base font-semibold">Part C · See it, then ship it</h3>
+        <h3 className="text-base font-semibold">Part C · See it</h3>
 
-        <Step n="C1" title="Run it and watch your changes">
-          On the server, start the app. Then, from your laptop, forward the port and
-          open it in your browser.
-          <Code label={`${sshTarget} — terminal`}>{`./scripts/preview.sh`}</Code>
-          <Code label="your laptop — a second terminal">{`ssh -i ${sshKey} -L 3003:localhost:3003 ${sshTarget}
-# then open http://localhost:3003/developers`}</Code>
-          The two placeholders are now the real API-key and staff widgets.
-        </Step>
-
-        <Step n="C2" title="Publish it live">
-          When it looks right, ship it.
-          <Code label={`${sshTarget} — terminal`}>{`./scripts/deploy.sh`}</Code>
+        <Step n="C1" title="Open your local Developers page">
+          Your <span className="font-mono text-xs">npm run dev</span> from B1 is already
+          serving. Open{" "}
+          <span className="font-mono text-xs">http://localhost:3003/developers</span>{" "}
+          (sign in with any name + email) — the two dotted placeholders are now the real
+          API-key and staff widgets, powered by the key you added in B4.
         </Step>
 
         <p className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-xs text-slate-500">
@@ -253,13 +332,14 @@ export const POST = handler;`}</Code>
           Part D · Give Nino&apos;s storefront a real key
         </h3>
         <p className="mt-1 text-sm text-slate-600">
-          Nino&apos;s Pizza (www.ninopizzas.com) currently calls the open backend
-          directly. Move it behind your proxy with a key <em>you</em> issued.
+          Nino&apos;s Pizza storefront calls the open backend directly. Move it behind
+          your proxy with a key <em>you</em> issued — running it locally too.
         </p>
 
         <Step n="D1" title="Mint a data-plane key with the widget you just shipped">
-          Sign in to www.resiresi.com as Nino&apos;s (restaurant{" "}
-          <span className="font-mono text-xs">nino</span>, any email you like, e.g.{" "}
+          On your local <span className="font-mono text-xs">http://localhost:3003</span>,
+          sign in as Nino&apos;s (restaurant{" "}
+          <span className="font-mono text-xs">nino</span>, any email, e.g.{" "}
           <span className="font-mono text-xs">owner@nino.com</span>), open{" "}
           <span className="font-medium">Developers → API access</span>, and click{" "}
           <span className="font-medium">+ Create key</span>. Copy the key — this is a{" "}
@@ -267,16 +347,19 @@ export const POST = handler;`}</Code>
           nothing more.
         </Step>
 
-        <Step n="D2" title="Wire it into ninopizzas.com">
-          Point the storefront at your proxy and hand it the key. Same server, one
-          folder over:
-          <Code label={`${sshTarget} — terminal`}>{`cd /home/ubuntu/code/rr/nino
+        <Step n="D2" title="Run Nino's storefront against your proxy">
+          Point Nino&apos;s at your proxy and hand it the key, then start it — a third
+          terminal, one folder over:
+          <Code label="your laptop — terminal">{`cd ../nino
 
-npx vercel env rm RESIRESI_API_URL production --yes
-printf 'https://${PROXY_NAME}.abz.run/1.0.0/prod' | npx vercel env add RESIRESI_API_URL production
-printf '<the key from D1>' | npx vercel env add RESIRESI_API_KEY production
+cat > .env.local <<EOF
+RESIRESI_API_URL=https://${PROXY_NAME}.tryabz.run/1.0.0/prod
+RESIRESI_API_KEY=<the key from D1>
+RESIRESI_RESTAURANT_ID=nino
+EOF
 
-npx vercel deploy --prod --yes`}</Code>
+npm install
+npm run dev        # → http://localhost:3001`}</Code>
         </Step>
 
         <Step n="D3" title="Who is calling? The storefront already tells you">
@@ -289,7 +372,7 @@ headers: {
   "x-api-key": process.env.RESIRESI_API_KEY,   // the key from D1
   "X-End-User-Id": user.email,                 // "john@nino.com" or "maria@nino.com"
 }`}</Code>
-          Book a table on www.ninopizzas.com signed in as{" "}
+          Book a table on <span className="font-mono text-xs">http://localhost:3001</span> signed in as{" "}
           <span className="font-mono text-xs">john@nino.com</span>, then again as{" "}
           <span className="font-mono text-xs">maria@nino.com</span> — two people, one
           key, both attributed.
@@ -311,7 +394,7 @@ headers: {
           that&apos;s the problem.
           <Code label="your laptop — terminal">{`NINO_KEY="<the key from D1>"
 
-curl "https://${PROXY_NAME}.abz.run/1.0.0/prod/restaurants/nino/reservations" \\
+curl "https://${PROXY_NAME}.tryabz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
   -H "X-API-Key: $NINO_KEY" \\
   -H "X-End-User-Id: john@nino.com"
 # → every diner's reservations. John shouldn't see these.`}</Code>
@@ -335,12 +418,12 @@ unless they are in the "reservationists" group, who can see all of them.`}</Code
         <Step n="E4" title="AFTER — John sees only John; Maria sees everything">
           Run the same two calls again:
           <Code label="your laptop — terminal">{`# John (a diner): now only his own bookings
-curl "https://${PROXY_NAME}.abz.run/1.0.0/prod/restaurants/nino/reservations" \\
+curl "https://${PROXY_NAME}.tryabz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
   -H "X-API-Key: $NINO_KEY" \\
   -H "X-End-User-Id: john@nino.com"
 
 # Maria (in the reservationists group): still sees all of them
-curl "https://${PROXY_NAME}.abz.run/1.0.0/prod/restaurants/nino/reservations" \\
+curl "https://${PROXY_NAME}.tryabz.run/1.0.0/prod/v1/restaurants/nino/reservations" \\
   -H "X-API-Key: $NINO_KEY" \\
   -H "X-End-User-Id: maria@nino.com"`}</Code>
           Same key, same endpoint — the <em>person</em> and their <em>group</em> now

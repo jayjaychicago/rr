@@ -1,13 +1,13 @@
 import type { ApiBlazeConfig } from "./apiblaze";
 
 // Resiresi (shared reservation backend)
-const ORIGINAL_BASE = `${process.env.RESIRESI_API_URL!}/v1`;
+const ORIGINAL_BASE = `${process.env.RESIRESI_API_URL ?? "https://backend.resiresi.com"}/v1`;
 // Optional: an APIblaze DP key. Set when RESIRESI_API_URL points at the proxy —
 // the key says which APP is calling; X-End-User-Id (below) says which PERSON.
 const ENV_API_KEY = process.env.RESIRESI_API_KEY;
 const PROXY_BASE = "https://rr-nino.apiblaze.com/1.0.0/prod";
 // Accepts the restaurant slug ("nino") or its UUID — the API resolves either.
-export const RESTAURANT_ID = process.env.RESIRESI_RESTAURANT_ID!;
+export const RESTAURANT_ID = process.env.RESIRESI_RESTAURANT_ID ?? "nino";
 
 export interface Reservation {
   id: string;
