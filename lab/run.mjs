@@ -144,11 +144,24 @@ function newSuffix() {
 async function main() {
   console.log(bold("\n  ResiResi × APIblaze — guided lab\n"));
   console.log(dim("  You are ResiResi, a reservation platform with two restaurant tenants,\n" +
-    "  Nino's and Gino's. You'll put APIblaze in front of your API so tenants can\n" +
-    "  mint keys and manage staff — then prove a diner sees only their own\n" +
-    "  reservations while staff see everything. Everything runs on this machine.\n"));
+    "  Nino's and Gino's. Your reservation API has no access control of its own —\n" +
+    "  today anyone with the address can read everyone's reservations. This lab\n" +
+    "  fixes that by putting APIblaze in front of it. Everything runs on this\n" +
+    "  machine; nothing is deployed anywhere.\n"));
+  console.log(bold("  What you'll set up, in plain terms:\n"));
+  console.log(
+    "  " + green("1.") + " Start ResiResi's reservation API on your computer.\n" +
+    "  " + green("2.") + " Put an APIblaze " + bold("gateway") + " in front of it — a checkpoint every\n" +
+    "     request passes through, so you can add rules without touching the API.\n" +
+    "  " + green("3.") + " Give that gateway a public web address and link it back to your\n" +
+    "     computer, so calls to the address reach your local API.\n" +
+    "  " + green("4.") + " Add " + bold("logins, API keys, and staff groups") + " to ResiResi's app — using\n" +
+    "     APIblaze's ready-made widgets, so you don't write that code yourself.\n" +
+    "  " + green("5.") + " Prove it works: write one access rule, then watch a diner see only\n" +
+    "     their own reservations while a staff member still sees them all.\n");
   console.log(dim("  Requirements: Node 20+ and a free APIblaze account (one browser login,\n" +
-    "  for the localhost tunnel). Ctrl-C any time; re-run to resume.\n"));
+    "  for the step that gives your API a public address). Ctrl-C any time;\n" +
+    "  re-run to resume where you left off.\n"));
 
   await preflight();
 
