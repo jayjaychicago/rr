@@ -190,8 +190,8 @@ async function main() {
     "     computer, so calls to the address reach your local backend.\n" +
     "  " + green("4.") + " Add " + bold("logins, API keys, and staff groups") + " to ResiResi's app — using\n" +
     "     APIblaze's ready-made widgets, so you don't write that code yourself.\n" +
-    "  " + green("5.") + " Prove it works: write one access rule, then watch a diner see only\n" +
-    "     their own reservations while a staff member still sees them all.\n");
+    "  " + green("5.") + " Prove it works: John could open Maria's reservation before — after the\n" +
+    "     rules, he can't (but his own still works, and staff see everything).\n");
   console.log(dim("  Requirements: Node 20+ and a free APIblaze account (one browser login,\n" +
     "  for the step that gives your API a public address). Ctrl-C any time;\n" +
     "  re-run to resume where you left off.\n"));
@@ -459,20 +459,36 @@ async function main() {
     `  name and the email  ${OWNER} . Both widgets appear, ready to use.`));
   await pause("Signed in? Press Enter");
 
-  // 12 · BEFORE
-  const curlFor = (email) =>
-    `curl "${BASE}/v1/restaurants/nino/reservations" \\\n` +
+  // 12 · BEFORE — John opens MARIA'S reservation by id. The lab first finds
+  // one of Maria's seeded reservations (as Maria, so this fetch works before
+  // AND after the rules land).
+  const listUrl = `${BASE}/v1/restaurants/nino/reservations`;
+  if (!state.mariaResi) {
+    const lr = await fetch(listUrl, { headers: { "X-API-Key": DPKEY, "X-End-User-Id": "maria@nino.com" } });
+    const ld = await lr.json().catch(() => null);
+    const mrow = ld && Array.isArray(ld.data) ? ld.data.find((x) => x.diner_external_id === "maria@nino.com") : null;
+    if (mrow) { state.mariaResi = mrow.id; saveState(state); }
+  }
+  const MARIA_RESI = state.mariaResi;
+  const curlOne = (who, id) =>
+    `curl "${BASE}/v1/restaurants/nino/reservations/${id}" \\\n` +
     `  -H "X-API-Key: ${DPKEY}" \\\n` +
-    `  -H "X-End-User-Id: ${email}"`;
-  step("BEFORE — John can see everyone's reservations",
-    "Right now any caller with Nino's key reads every reservation. That's the bug.\n" +
-    "This is John's own call — note how much he can see.");
-  await pause("Press Enter to run this step", curlFor("john@nino.com"));
-  {
-    const r = await httpOk(`${BASE}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
-    const d = await r.json();
-    console.log(yellow(`  John sees ${d.data.length} reservations — his own are highlighted; the rest are other diners'. Not right.`));
-    printReservations(d.data, "john@nino.com");
+    `  -H "X-End-User-Id: ${who}"`;
+  step("BEFORE — John can open MARIA'S reservation",
+    "Maria has a reservation at Nino's. John is a different diner — but with the\n" +
+    "app's key, nothing stops him from opening HER booking by its id:");
+  await pause("Press Enter to run this step", curlOne("john@nino.com", MARIA_RESI ?? "<maria's id>"));
+  if (MARIA_RESI) {
+    const r = await fetch(`${listUrl}/${MARIA_RESI}`, { headers: { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" } });
+    const d = await r.json().catch(() => null);
+    if (r.ok && d) {
+      console.log(yellow(`  HTTP 200 — John just read Maria's reservation. Not right:`));
+      printReservations([d], "maria@nino.com");
+    } else {
+      console.log(dim(`  HTTP ${r.status} (already blocked? you may be resuming after the rule).`));
+    }
+  } else {
+    console.log(yellow("  Couldn't locate Maria's seeded reservation — continuing anyway."));
   }
 
   // 13 · make the group — user's choice: click it in the widget, or let the
@@ -501,10 +517,11 @@ async function main() {
   }
 
   // 14 · agent authz
-  step("Write the access rule by chatting",
-    "The agent designs and enables the rule. When the chat opens, paste this\n" +
-    "(one line, so it copies clean):\n\n" +
-    yellow('Write exactly one rule, on GET /v1/restaurants/{restaurantId}/reservations only: FILTER the returned list (never reject the request) so each row is visible only when its diner_external_id equals the caller\'s X-End-User-Id — except callers who are members of the existing group "reservationists", who see every row. Use only that existing group; do not invent orgs, roles, memberships, or extra conditions. Leave every other route fully allowed.') + "\n\n" +
+  step("Write the access rules by chatting",
+    "The agent designs and enables three small rules: bookings remember WHO made\n" +
+    "them, a reservation opens only for its owner (or staff), and the full list\n" +
+    "is staff-only. When the chat opens, paste this (one line, copies clean):\n\n" +
+    yellow('Author the model and rules for exactly this, nothing more. 1) POST /v1/restaurants/{restaurantId}/reservations stays open to every caller, but after a successful response record the caller (their x-end-user-id) as owner of the new reservation object, using the id field of the response. 2) GET /v1/restaurants/{restaurantId}/reservations/{reservationId} is allowed only for that reservation\'s owner or members of the existing group "reservationists". 3) GET /v1/restaurants/{restaurantId}/reservations (the full list) is allowed only for members of "reservationists". Protect nothing else — every other route stays fully allowed. Use only the existing group "reservationists"; do not invent orgs, roles, or memberships.') + "\n\n" +
     dim("  Then type /enable (or follow the agent's prompt) and exit the chat."));
   if (isDone("authz")) {
     console.log(green("  ✓ the rule was already enabled on a previous run"));
@@ -516,33 +533,50 @@ async function main() {
     markDone("authz");
   }
 
-  // 15 · AFTER
-  step("AFTER — the rule in action",
-    "Same key, same endpoint — the PERSON and their GROUP now decide the result.\n" +
-    "We run John's call and Maria's call back to back so you can compare.");
+  // 15 · AFTER — the full story in four calls.
+  step("AFTER — John books his own; Maria's is off-limits",
+    "Same app key everywhere — the PERSON now decides the result:\n" +
+    "  1. John books a table (the proxy records him as the owner).\n" +
+    "  2. John opens HIS new reservation — works.\n" +
+    "  3. John tries MARIA'S reservation — refused.\n" +
+    "  4. Maria (staff) opens John's — works.");
   await pause("Press Enter to run this step",
-    curlFor("john@nino.com") + "\n\n" + curlFor("maria@nino.com"));
+    curlOne("john@nino.com", MARIA_RESI ?? "<maria's id>"));
   {
-    // Never crash on a non-2xx here — with enforcement freshly ON, a denial IS
-    // a result worth showing (status + body), not an exception.
-    const show = async (who, label, expect) => {
-      const r = await fetch(`${BASE}/v1/restaurants/nino/reservations`, { headers: { "X-API-Key": DPKEY, "X-End-User-Id": who } });
-      const body = await r.json().catch(() => null);
-      if (r.ok && body && Array.isArray(body.data)) {
-        console.log(green(`\n  ${label} — ${body.data.length} reservations, ${expect}:`));
-        printReservations(body.data, "john@nino.com");
-      } else {
-        console.log(yellow(`\n  ${label} — HTTP ${r.status}`));
-        if (body) console.log(dim("    " + JSON.stringify(body).slice(0, 300)));
-        console.log(dim("    (an unexpected denial usually means the enabled rule blocks the call\n" +
-          "    outright instead of filtering — refine it with: npx apiblaze agent authz " + PROXY + ")"));
-      }
-    };
-    await show("john@nino.com", "John (diner)", "only his own");
-    await show("maria@nino.com", "Maria (reservationist)", "all of them");
+    const H = (who) => ({ "X-API-Key": DPKEY, "X-End-User-Id": who, "Content-Type": "application/json" });
+    const outcome = (n, label, ok, detail) =>
+      console.log((ok ? green : yellow)(`  ${n}. ${label} — ${detail}${ok ? " ✓" : ""}`));
+
+    // 1 · John books
+    const br = await fetch(listUrl, { method: "POST", headers: H("john@nino.com"),
+      body: JSON.stringify({ diner_name: "John Diner", diner_external_id: "john@nino.com",
+        party_size: 2, starts_at: new Date(Date.now() + 86400000).toISOString() }) });
+    const bd = await br.json().catch(() => null);
+    const JOHN_RESI = bd?.id ?? null;
+    outcome(1, "John books a table", br.status === 201, `HTTP ${br.status}${JOHN_RESI ? " · owner recorded by the proxy" : ""}`);
+
+    // 2 · John reads his own
+    if (JOHN_RESI) {
+      const r2 = await fetch(`${listUrl}/${JOHN_RESI}`, { headers: H("john@nino.com") });
+      outcome(2, "John opens HIS reservation", r2.ok, `HTTP ${r2.status}`);
+    } else {
+      console.log(yellow("  2. (skipped — booking failed above)"));
+    }
+
+    // 3 · John tries Maria's
+    if (MARIA_RESI) {
+      const r3 = await fetch(`${listUrl}/${MARIA_RESI}`, { headers: H("john@nino.com") });
+      outcome(3, "John tries MARIA'S reservation", !r3.ok, `HTTP ${r3.status}${!r3.ok ? " · blocked" : " — expected a denial! (is Enforce Authorization on?)"}`);
+    }
+
+    // 4 · Maria (staff) reads John's
+    if (JOHN_RESI) {
+      const r4 = await fetch(`${listUrl}/${JOHN_RESI}`, { headers: H("maria@nino.com") });
+      outcome(4, "Maria (staff) opens John's", r4.ok, `HTTP ${r4.status}${r4.ok ? " · reservationists see everything" : " — expected 200: is maria in the group?"}`);
+    }
   }
 
-  console.log(bold(green("\n  ✓ Lab complete — one key, many people, per-person results.\n")));
+  console.log(bold(green("\n  ✓ Lab complete — one key, many people: owners see their own, staff see all.\n")));
   console.log(dim("  Cleanup: this script stops the backend, app and tunnel when it exits.\n"));
   rl.close();
 }
