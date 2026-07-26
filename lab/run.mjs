@@ -368,28 +368,22 @@ async function main() {
     { what: "the app" });
   console.log(green("  up ✓"));
 
-  // 10 · human: open + sign in
-  step("Open the app and sign in",
-    "You'll sign in to ResiResi's app as its owner. Pick the email you'll use —\n" +
-    "the default is fine, or use your own; you just have to sign in with the SAME\n" +
-    "one so the next step can make it the admin.");
+  // 10 · crown the admin, then sign in as them (one step — the admin is named
+  // BEFORE the first sign-in, so the widget is ready the moment they land).
+  step("Make yourself the admin and sign in",
+    "ResiResi's app needs a first admin — the person who manages users & groups.\n" +
+    "You hold the manager key, so you name that admin here, then sign in as them.\n" +
+    "Pick the email (the default is fine; sign in with the SAME one).");
   const defaultEmail = state.ownerEmail || "owner@nino.com";
   const answer = (await ask(`\n${cyan("▸ Admin and Email you'll sign in as")} ${dim("[" + defaultEmail + "]")}: `)).trim();
   const OWNER = answer || defaultEmail;
   state.ownerEmail = OWNER; saveState(state);
-  console.log(dim(`\n  Now open  http://localhost:3003/developers  and sign in with any name and\n` +
-    `  the email  ${OWNER} . Both widgets appear; Users & Groups will say “admin\n` +
-    `  access pending” (the admin list is sealed from inside the widget).`));
-  await pause("Signed in? Press Enter");
-
-  // 11 · crown admin
-  step("Crown yourself the first admin",
-    `You hold the manager key, so you name the very first admin (${OWNER}) from\n` +
-    "here. After this, the Users & Groups widget lets that admin manage everyone else.");
   const adminArgs = ["admins", "add", OWNER, "--tenant", "nino"];
   await pause("Press Enter to run this step", abzDisplay(adminArgs));
   await abz(adminArgs);
-  console.log(dim("  Reload the Users & Groups widget — it flips from pending to ready."));
+  console.log(dim(`\n  Done — now open  http://localhost:3003/developers  and sign in with any\n` +
+    `  name and the email  ${OWNER} . Both widgets appear, ready to use.`));
+  await pause("Signed in? Press Enter");
 
   // 12 · BEFORE
   const curlFor = (email) =>
