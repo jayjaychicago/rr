@@ -309,7 +309,7 @@ async function main() {
   }
 
   // 4 · tunnel
-  const tunnelArgs = ["dev", "8080", "--project", PROXY, "--yes"];
+  const tunnelArgs = ["dev", "8080", "--project", PROXY];
   step("Connect your API to the gateway",
     "Your backend lives on your laptop; the gateway lives in the cloud. This opens a\n" +
     "secure link between them so real calls to the public URL reach your machine.\n" +
