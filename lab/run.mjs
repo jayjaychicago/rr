@@ -138,7 +138,7 @@ function commandOk(cmd, args) {
 // Pinned to an exact version (not @latest) so npx installs it ONCE and then runs
 // straight from cache on every later call — no per-command registry round-trip,
 // no repeated prompts, and the lab always runs the version it was written for.
-const ABZ = ["--yes", "apiblaze@0.19.6"];
+const ABZ = ["--yes", "apiblaze@0.19.7"];
 const abz = (args, opts) => run(NPX, [...ABZ, ...args], opts);
 const abzCapture = (args, opts) => capture(NPX, [...ABZ, ...args], opts);
 
@@ -401,16 +401,25 @@ async function main() {
     printReservations(d.data, "john@nino.com");
   }
 
-  // 13 · human: make the group
+  // 13 · make the group — user's choice: click it in the widget, or let the
+  // lab run the equivalent CLI commands (same result either way).
   step("Put staff in a group",
-    "In the Users & Groups widget, three quick things:\n" +
-    "  1. Click " + bold("+ New user") + " and add  " + bold("maria@nino.com") + "  — she becomes\n" +
-    "     staff you can manage right away (John stays just a diner).\n" +
-    "  2. Click " + bold("+ New group") + " and name it  " + bold("reservationists") + " .\n" +
-    "  3. In that group's member box, type  maria , pick her, and Add.\n" +
-    dim("  (Add Maria first so she exists to be grouped — she shows up in the member\n" +
-    "  search as soon as you've added her.)"));
-  await pause("Do that in the widget, then press Enter");
+    "Goal: a group called  " + bold("reservationists") + "  with  " + bold("maria@nino.com") + "  in it\n" +
+    "(she's staff; John stays just a diner). Two ways to do it — pick one:\n\n" +
+    "  " + bold("[w]idget") + "  — in Users & Groups: + New user → maria@nino.com,\n" +
+    "              + New group → reservationists, then add maria as a member.\n" +
+    "  " + bold("[t]erminal") + " — the lab runs these for you:\n" +
+    green(`      npx apiblaze group create reservationists --admin ${OWNER} --tenant nino\n` +
+    "      npx apiblaze group add-user maria@nino.com reservationists --tenant nino"));
+  const how = (await ask(`\n${cyan("▸ widget or terminal?")} ${dim("[t]")}: `)).trim().toLowerCase();
+  if (how.startsWith("w")) {
+    await pause("Done in the widget? Press Enter");
+  } else {
+    await abz(["group", "create", "reservationists", "--admin", OWNER, "--tenant", "nino"]);
+    await abz(["group", "add-user", "maria@nino.com", "reservationists", "--tenant", "nino"]);
+    console.log(green("  reservationists ✓ (maria@nino.com is a member)"));
+    console.log(dim("  Refresh the Users & Groups widget to see it there too."));
+  }
 
   // 14 · agent authz
   step("Write the access rule by chatting",
