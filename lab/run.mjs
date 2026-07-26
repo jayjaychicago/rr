@@ -504,7 +504,7 @@ async function main() {
   step("Write the access rule by chatting",
     "The agent designs and enables the rule. When the chat opens, paste this\n" +
     "(one line, so it copies clean):\n\n" +
-    yellow('On GET /v1/restaurants/{restaurantId}/reservations a caller may see only reservations whose diner_external_id matches their X-End-User-Id, unless they are in the "reservationists" group, who can see all of them.') + "\n\n" +
+    yellow('Write exactly one rule, on GET /v1/restaurants/{restaurantId}/reservations only: FILTER the returned list (never reject the request) so each row is visible only when its diner_external_id equals the caller\'s X-End-User-Id — except callers who are members of the existing group "reservationists", who see every row. Use only that existing group; do not invent orgs, roles, memberships, or extra conditions. Leave every other route fully allowed.') + "\n\n" +
     dim("  Then type /enable (or follow the agent's prompt) and exit the chat."));
   if (isDone("authz")) {
     console.log(green("  ✓ the rule was already enabled on a previous run"));
