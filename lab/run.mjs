@@ -392,10 +392,11 @@ async function main() {
 
   // 7 · frontend deps + env
   step("Install ResiResi's web app + drop in the key",
-    "This is ResiResi's own website — where diners and staff sign in and manage\n" +
-    "reservations. It's a normal Next.js app in this repo. We install it, plus the\n" +
-    "apiblaze package for its widgets, and give it the widget key (which stays on\n" +
-    "the server, never in the browser).");
+    "ResiResi's website (a normal Next.js app in this repo) has a Developers\n" +
+    "section where Nino's and Gino's software engineers SELF-SERVE: they get the\n" +
+    "API keys their own restaurant websites use to make reservations, and manage\n" +
+    "their users & groups. We install the app, plus the apiblaze package for its\n" +
+    "widgets, and give it the widget key (stays on the server, never in the browser).");
   if (isDone("install")) {
     skipNote();
     writeFileSync(join(FE, ".env.local"), `APIBLAZE_CP_KEY=${CPKEY}\n`);
