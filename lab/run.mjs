@@ -409,13 +409,13 @@ async function main() {
     "  • rr/resiresi-frontend/app/api/apiblaze/groups/route.ts\n" +
     "(the two routes keep the widget key on the server), then mounts the API-key\n" +
     "and Users & Groups widgets in rr/resiresi-frontend/app/developers/page.tsx.");
-  if (isDone("wire")) {
+  if (isDone("wire2")) {
     skipNote();
   } else {
     await pause("Press Enter to run this step");
     wireWidgets(FE, PROXY.slice("resiresi".length));
     console.log(green("  3 files created + widgets mounted ✓"));
-    markDone("wire");
+    markDone("wire2");
   }
 
   // 9 · dev server
