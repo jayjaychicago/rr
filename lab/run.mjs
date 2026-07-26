@@ -234,6 +234,7 @@ async function main() {
     return {
       prod: `https://${projectId}.abz.run/1.0.0/prod`,
       dpkey: (created.api_keys && created.api_keys.prod) || created.api_key,
+      devkey: (created.api_keys && created.api_keys.dev) || null,
     };
   };
 
@@ -260,9 +261,24 @@ async function main() {
       await abz(["delete", PROXY, "--yes"]).catch(() => {});
       cj = await abzCapture(createArgs);
     }
-    ({ prod: PROD, dpkey: DPKEY } = parseCreate(cj));
-    state.prod = PROD; state.dpkey = DPKEY; saveState(state);
+    const parsed = parseCreate(cj);
+    PROD = parsed.prod; DPKEY = parsed.dpkey;
+    state.prod = PROD; state.dpkey = DPKEY; state.devkey = parsed.devkey; saveState(state);
     console.log("  Proxy (prod): " + green(PROD));
+  }
+  const DEVKEY = state.devkey || null;
+
+  // 3b · give the gateway the real OpenAPI spec — the AI agents (docs, authz)
+  // reason from your routes; without it they'd be flying blind.
+  if (!state.specSet) {
+    const specArgs = ["spec", "set", PROXY, "--file", "resiresi-backend-lightweight/openapi.yaml"];
+    step("Hand the gateway your API's spec",
+      "ResiResi's backend ships an OpenAPI spec (the machine-readable list of its\n" +
+      "routes). Giving it to the gateway lets APIblaze's AI agents — like the\n" +
+      "authorization agent later — reason about your actual endpoints.");
+    await pause("Press Enter to run this step", abzDisplay(specArgs));
+    await abz(specArgs, { cwd: ROOT });
+    state.specSet = true; saveState(state);
   }
 
   // 4 · tunnel
@@ -308,6 +324,21 @@ async function main() {
     const d = await r.json();
     console.log(green(`  ✓ ${d.data.length} reservations returned:`));
     printReservations(d.data);
+  }
+
+  // Also send a few DEV-environment calls: the gateway captures traffic samples
+  // on dev (never on prod), and the authorization agent later designs its rules
+  // from those real allowed/denied examples.
+  if (DEVKEY) {
+    process.stdout.write(dim("  seeding sample traffic on the dev environment for the AI agents "));
+    const DEV = PROD.replace("/prod", "/dev");
+    for (const who of ["john@nino.com", "maria@nino.com"]) {
+      await fetch(`${DEV}/v1/restaurants/nino/reservations`, { headers: { "X-API-Key": DEVKEY, "X-End-User-Id": who } }).catch(() => {});
+      process.stdout.write(dim("."));
+    }
+    // one keyless call → a denied (4xx-auth) sample, so the agent sees both sides
+    await fetch(`${DEV}/v1/restaurants/nino/reservations`).catch(() => {});
+    console.log(green(" ✓"));
   }
 
   // 6 · widget key
