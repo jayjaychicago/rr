@@ -502,10 +502,9 @@ async function main() {
 
   // 14 · agent authz
   step("Write the access rule by chatting",
-    "The agent designs and enables the rule. When the chat opens, paste:\n\n" +
-    yellow('  On GET /v1/restaurants/{restaurantId}/reservations a caller may see only\n' +
-    '  reservations whose diner_external_id matches their X-End-User-Id, unless they\n' +
-    '  are in the "reservationists" group, who can see all of them.') + "\n\n" +
+    "The agent designs and enables the rule. When the chat opens, paste this\n" +
+    "(one line, so it copies clean):\n\n" +
+    yellow('On GET /v1/restaurants/{restaurantId}/reservations a caller may see only reservations whose diner_external_id matches their X-End-User-Id, unless they are in the "reservationists" group, who can see all of them.') + "\n\n" +
     dim("  Then type /enable (or follow the agent's prompt) and exit the chat."));
   if (isDone("authz")) {
     console.log(green("  ✓ the rule was already enabled on a previous run"));
