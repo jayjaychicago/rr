@@ -196,8 +196,6 @@ async function main() {
     "  for the step that gives your API a public address). Ctrl-C any time;\n" +
     "  re-run to resume where you left off.\n"));
 
-  await preflight();
-
   let state = loadState();
   // Checkpoints: every completed non-infra step is recorded, so a crash mid-lab
   // resumes where it left off (infra — backend/tunnel/app — always restarts:
@@ -208,11 +206,21 @@ async function main() {
   const isDone = (k) => !!(state.done && state.done[k]);
   const skipNote = () => console.log(green("  ✓ already completed on a previous run — skipping"));
 
+  // The resume decision comes FIRST — before any step runs, so a returning user
+  // never replays even the tool check just to reach it.
+  let resuming = false;
   if (state.proxy && (state.base || (state.done && Object.keys(state.done).length))) {
     console.log(dim(`  Found progress from an earlier run (proxy ${state.proxy}).`));
     const a = (await ask(`${cyan("▸ resume it, or start fresh?")} ${dim("[r]esume / [f]resh")}: `)).trim().toLowerCase();
     if (a.startsWith("f")) { state = {}; saveState(state); console.log(dim("  Starting fresh.\n")); }
-    else console.log(dim("  Resuming — finished steps will be skipped.\n"));
+    else { resuming = true; console.log(dim("  Resuming — finished steps will be skipped.\n")); }
+  }
+
+  if (resuming && isDone("preflight")) {
+    // CLI already fetched on the prior run; skip the whole tool-check step.
+  } else {
+    await preflight();
+    markDone("preflight");
   }
 
   const PROXY = state.proxy || ("resiresi" + newSuffix());
