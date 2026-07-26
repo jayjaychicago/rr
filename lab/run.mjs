@@ -311,10 +311,15 @@ async function main() {
   }
 
   // 6 · widget key
-  step("Mint the control-plane widget key",
-    "A limited manager key that lets the app's own widgets issue tenant keys and\n" +
-    "read users & groups — without being a full admin key. It stays on the server,\n" +
-    "never in the browser. Shown once.");
+  step("Mint the key that powers ResiResi's Developers page",
+    "The API side is done and proven. Next up: ResiResi's WEBSITE — its\n" +
+    "Developers section, where restaurant tenants like Nino's and Gino's do\n" +
+    "admin things themselves: get API keys for their apps, and organize their\n" +
+    "users into groups.\n\n" +
+    "For the website's backend to perform those admin actions, it needs its own\n" +
+    "key — a limited one that can ONLY do those admin actions (issue keys, manage\n" +
+    "users & groups), not a full-control key. This mints it. It stays on the\n" +
+    "server, never in the browser, and is shown once.");
   const mintArgs = ["apikeys", "mint", "--desc", "resiresi widget key", "--json"];
   let CPKEY;
   if (state.cpkey) {
@@ -369,7 +374,7 @@ async function main() {
     "the default is fine, or use your own; you just have to sign in with the SAME\n" +
     "one so the next step can make it the admin.");
   const defaultEmail = state.ownerEmail || "owner@nino.com";
-  const answer = (await ask(`\n${cyan("▸ Email you'll sign in as")} ${dim("[" + defaultEmail + "]")}: `)).trim();
+  const answer = (await ask(`\n${cyan("▸ Admin and Email you'll sign in as")} ${dim("[" + defaultEmail + "]")}: `)).trim();
   const OWNER = answer || defaultEmail;
   state.ownerEmail = OWNER; saveState(state);
   console.log(dim(`\n  Now open  http://localhost:3003/developers  and sign in with any name and\n` +
