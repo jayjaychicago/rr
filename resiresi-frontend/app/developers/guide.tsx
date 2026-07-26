@@ -87,7 +87,7 @@ localhost tunnel needs login — I will complete the browser login when prompted
      import { ApiKeyWidget, UsersGroupsWidget } from "apiblaze/react";
    and replace the two <Placeholder>…</Placeholder> blocks with
      <ApiKeyWidget title="API keys" theme={{ accent: "#4f46e5" }} />
-     <UsersGroupsWidget title="Your staff" theme={{ accent: "#4f46e5" }} />
+     <UsersGroupsWidget theme={{ accent: "#4f46e5" }} />
 
 8. Start it: npm run dev  (serves http://localhost:3003). Open
    http://localhost:3003/developers, sign in with any name + email (e.g.
@@ -312,7 +312,7 @@ export const POST = handler;`}</Code>
           <span className="font-mono text-xs">&lt;Placeholder&gt;…&lt;/Placeholder&gt;</span>{" "}
           blocks with its widget:
           <Code label={'replace the "API access" placeholder with'}>{`<ApiKeyWidget title="API keys" theme={{ accent: "#4f46e5" }} />`}</Code>
-          <Code label={'replace the "Users & Groups" placeholder with'}>{`<UsersGroupsWidget title="Your staff" theme={{ accent: "#4f46e5" }} />`}</Code>
+          <Code label={'replace the "Users & Groups" placeholder with'}>{`<UsersGroupsWidget theme={{ accent: "#4f46e5" }} />`}</Code>
         </Step>
 
         <Step n="C6" title="See it — and crown the first admin">
