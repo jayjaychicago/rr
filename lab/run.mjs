@@ -228,14 +228,15 @@ async function main() {
   // 3 · create proxy
   const createArgs = ["create", "--name", PROXY,
     "--target", "http://localhost:8080", "--auth", "api_key", "--identified", "--iam", "--json"];
-  step("Put APIblaze in front of your local backend",
-    "This creates a gateway that sits in front of your API. Two options switch on\n" +
-    "the features this lab needs:\n" +
+  step("Create the APIblaze proxy",
+    `This creates the APIblaze proxy  ${bold(PROXY + ".abz.run")}  — the public\n` +
+    "address that will tunnel into your local backend. Two options switch on the\n" +
+    "features this lab needs:\n" +
     "  • --identified — each request can say which PERSON it's for, so later a\n" +
     "    rule can give every diner only their own reservations.\n" +
     "  • --iam — turns on users & groups, so you can put staff (like Maria) in a\n" +
     "    group a rule can treat differently.\n" +
-    `The name "${PROXY}" is unique to your run, so no two testers ever clash.`);
+    `("${PROXY}" is unique to your run, so no two testers ever clash.)`);
   const parseCreate = (out) => {
     const created = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1));
     const projectId = created.project_id || PROXY;
