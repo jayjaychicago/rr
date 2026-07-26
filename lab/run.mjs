@@ -521,7 +521,7 @@ async function main() {
     "The agent designs and enables three small rules: bookings remember WHO made\n" +
     "them, a reservation opens only for its owner (or staff), and the full list\n" +
     "is staff-only. When the chat opens, paste this (one line, copies clean):\n\n" +
-    yellow('Author the model and rules for exactly this, nothing more. 1) POST /v1/restaurants/{restaurantId}/reservations stays open to every caller, but after a successful response record the caller (their x-end-user-id) as owner of the new reservation object, using the id field of the response. 2) GET /v1/restaurants/{restaurantId}/reservations/{reservationId} is allowed only for that reservation\'s owner or members of the existing group "reservationists". 3) GET /v1/restaurants/{restaurantId}/reservations (the full list) is allowed only for members of "reservationists". Protect nothing else — every other route stays fully allowed. Use only the existing group "reservationists"; do not invent orgs, roles, or memberships.') + "\n\n" +
+    yellow('Bookings belong to whoever makes them. A reservation may be opened by its owner or by members of the existing group "reservationists". The full reservations list is for "reservationists" only. Leave every other route open.') + "\n\n" +
     dim("  Then type /enable (or follow the agent's prompt) and exit the chat."));
   if (isDone("authz")) {
     console.log(green("  ✓ the rule was already enabled on a previous run"));
