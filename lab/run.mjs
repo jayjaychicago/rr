@@ -80,27 +80,35 @@ function cleanup() {
 process.on("exit", cleanup);
 process.on("SIGINT", () => { cleanup(); process.exit(130); });
 
-/** Run a command, inheriting the terminal (interactive prompts work). Awaits exit. */
+/** Run a command, inheriting the terminal (interactive prompts work). Awaits exit.
+ *  CRITICAL: the lab's own readline must let go of stdin while the child runs —
+ *  otherwise both processes race for keystrokes and the child's prompts (e.g.
+ *  the login team picker) eat every other Enter. rl.pause() releases stdin to
+ *  the child; resume when it exits so the next "Press Enter" works. */
 function run(cmd, args, opts = {}) {
   const shown = [cmd, ...args].join(" ");
   console.log(dim("$ " + shown));
+  rl.pause();
   return new Promise((res, rej) => {
     const p = spawn(cmd, args, { stdio: "inherit", shell: isWin, ...opts });
-    p.on("error", rej);
-    p.on("close", (code) => (code === 0 ? res() : rej(new Error(`${shown} exited ${code}`))));
+    const done = (fn) => (arg) => { rl.resume(); fn(arg); };
+    p.on("error", done(rej));
+    p.on("close", done((code) => (code === 0 ? res() : rej(new Error(`${shown} exited ${code}`)))));
   });
 }
 
-/** Run and capture stdout (still echoes to the user). */
+/** Run and capture stdout (still echoes to the user). Same stdin handoff as run(). */
 function capture(cmd, args, opts = {}) {
   const shown = [cmd, ...args].join(" ");
   console.log(dim("$ " + shown));
+  rl.pause();
   return new Promise((res, rej) => {
     const p = spawn(cmd, args, { stdio: ["inherit", "pipe", "inherit"], shell: isWin, ...opts });
     let out = "";
     p.stdout.on("data", (d) => { out += d; process.stdout.write(d); });
-    p.on("error", rej);
-    p.on("close", (code) => (code === 0 ? res(out) : rej(new Error(`${shown} exited ${code}`))));
+    const done = (fn) => (arg) => { rl.resume(); fn(arg); };
+    p.on("error", done(rej));
+    p.on("close", done((code) => (code === 0 ? res(out) : rej(new Error(`${shown} exited ${code}`)))));
   });
 }
 
