@@ -146,7 +146,7 @@ function commandOk(cmd, args) {
 // Pinned to an exact version (not @latest) so npx installs it ONCE and then runs
 // straight from cache on every later call — no per-command registry round-trip,
 // no repeated prompts, and the lab always runs the version it was written for.
-const ABZ = ["--yes", "apiblaze@0.19.7"];
+const ABZ = ["--yes", "apiblaze@0.19.8"];
 const abz = (args, opts) => run(NPX, [...ABZ, ...args], opts);
 const abzCapture = (args, opts) => capture(NPX, [...ABZ, ...args], opts);
 
@@ -225,13 +225,17 @@ async function main() {
   await pause("Press Enter to run this step", "apiblaze login");
   await abz(["login"]);
 
-  // 3 · create proxy
+  // 3 · create proxy FROM the OpenAPI spec — one step gives the gateway the
+  // routes, the version, and the localhost targets (from the spec's `servers`).
   const createArgs = ["create", "--name", PROXY,
-    "--target", "http://localhost:8080", "--auth", "api_key", "--identified", "--iam", "--json"];
-  step("Create the APIblaze proxy",
+    "--openapi", "resiresi-backend-lightweight/openapi.yaml",
+    "--tenant", "nino",
+    "--auth", "api_key", "--identified", "--iam", "--json"];
+  step("Create the APIblaze proxy from your OpenAPI spec",
     `This creates the APIblaze proxy  ${bold(PROXY + ".abz.run")}  — the public\n` +
-    "address that will tunnel into your local backend. Two options switch on the\n" +
-    "features this lab needs:\n" +
+    "address that will tunnel into your local backend. It's created FROM the\n" +
+    "backend's OpenAPI spec, so the gateway knows your routes from day one (the\n" +
+    "AI agents use them later). Two options switch on this lab's features:\n" +
     "  • --identified — each request can say which PERSON it's for, so later a\n" +
     "    rule can give every diner only their own reservations.\n" +
     "  • --iam — turns on users & groups, so you can put staff (like Maria) in a\n" +
@@ -241,26 +245,28 @@ async function main() {
     const created = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1));
     const projectId = created.project_id || PROXY;
     return {
-      prod: `https://${projectId}.abz.run/1.0.0/prod`,
-      dpkey: (created.api_keys && created.api_keys.prod) || created.api_key,
-      devkey: (created.api_keys && created.api_keys.dev) || null,
+      // The whole lab drives the DEV environment: that's where the gateway
+      // captures traffic samples, so every call you see also feeds the AI agents.
+      base: `https://${projectId}.abz.run/1.0.0/dev`,
+      dpkey: (created.api_keys && created.api_keys.dev) || created.api_key,
+      tenant: created.tenant || "nino",
     };
   };
 
-  let PROD, DPKEY;
-  if (state.prod && state.dpkey) {
+  let BASE, DPKEY, TENANT;
+  if (state.base && state.dpkey) {
     // An earlier run already created this proxy (and saved its key) — reuse it
     // instead of trying to create a duplicate (which the server rejects).
     console.log(dim("\n  You already created this proxy on an earlier run — reusing it,\n" +
       "  no need to create it again."));
     await pause("Press Enter to continue");
-    PROD = state.prod; DPKEY = state.dpkey;
-    console.log(green("  Reusing " + PROD + " ✓"));
+    BASE = state.base; DPKEY = state.dpkey; TENANT = state.tenant || "nino";
+    console.log(green("  Reusing " + BASE + " ✓"));
   } else {
     await pause("Press Enter to run this step", abzDisplay(createArgs));
     let cj;
     try {
-      cj = await abzCapture(createArgs);
+      cj = await abzCapture(createArgs, { cwd: ROOT });
     } catch (e) {
       // The name exists on the server but this run has no key for it (a half-
       // finished earlier attempt). Remove that empty shell and create it fresh so
@@ -268,26 +274,12 @@ async function main() {
       console.log(yellow(`\n  "${PROXY}" already exists but this run has no key for it.`));
       console.log(dim("  Removing the old one and recreating it so the lab has a working key…"));
       await abz(["delete", PROXY, "--yes"]).catch(() => {});
-      cj = await abzCapture(createArgs);
+      cj = await abzCapture(createArgs, { cwd: ROOT });
     }
     const parsed = parseCreate(cj);
-    PROD = parsed.prod; DPKEY = parsed.dpkey;
-    state.prod = PROD; state.dpkey = DPKEY; state.devkey = parsed.devkey; saveState(state);
-    console.log("  Proxy (prod): " + green(PROD));
-  }
-  const DEVKEY = state.devkey || null;
-
-  // 3b · give the gateway the real OpenAPI spec — the AI agents (docs, authz)
-  // reason from your routes; without it they'd be flying blind.
-  if (!state.specSet) {
-    const specArgs = ["spec", "set", PROXY, "--file", "resiresi-backend-lightweight/openapi.yaml"];
-    step("Hand the gateway your API's spec",
-      "ResiResi's backend ships an OpenAPI spec (the machine-readable list of its\n" +
-      "routes). Giving it to the gateway lets APIblaze's AI agents — like the\n" +
-      "authorization agent later — reason about your actual endpoints.");
-    await pause("Press Enter to run this step", abzDisplay(specArgs));
-    await abz(specArgs, { cwd: ROOT });
-    state.specSet = true; saveState(state);
+    BASE = parsed.base; DPKEY = parsed.dpkey; TENANT = parsed.tenant;
+    state.base = BASE; state.dpkey = DPKEY; state.tenant = TENANT; saveState(state);
+    console.log("  Proxy (dev): " + green(BASE) + dim("  tenant: ") + green(TENANT));
   }
 
   // 4 · tunnel
@@ -306,7 +298,7 @@ async function main() {
   try {
     await waitFor(async () => {
       process.stdout.write(dim("."));
-      const r = await httpOk(`${PROD}/v1/restaurants`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
+      const r = await httpOk(`${BASE}/v1/restaurants`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
       return r !== null;
     }, { tries: 60, what: "the tunnel" });
   } catch (e) {
@@ -319,7 +311,7 @@ async function main() {
 
   // 5 · smoke test
   const smokeCurl =
-    `curl "${PROD}/v1/restaurants/nino/reservations" \\\n` +
+    `curl "${BASE}/v1/restaurants/nino/reservations" \\\n` +
     `  -H "X-API-Key: ${DPKEY}" \\\n` +
     `  -H "X-End-User-Id: john@nino.com"`;
   step("Prove the proxy reaches your machine",
@@ -329,26 +321,17 @@ async function main() {
     "it's a real, runnable request.");
   await pause("Press Enter to run this step", smokeCurl);
   {
-    const r = await httpOk(`${PROD}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
+    const r = await httpOk(`${BASE}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
     const d = await r.json();
     console.log(green(`  ✓ ${d.data.length} reservations returned:`));
     printReservations(d.data);
   }
 
-  // Also send a few DEV-environment calls: the gateway captures traffic samples
-  // on dev (never on prod), and the authorization agent later designs its rules
-  // from those real allowed/denied examples.
-  if (DEVKEY) {
-    process.stdout.write(dim("  seeding sample traffic on the dev environment for the AI agents "));
-    const DEV = PROD.replace("/prod", "/dev");
-    for (const who of ["john@nino.com", "maria@nino.com"]) {
-      await fetch(`${DEV}/v1/restaurants/nino/reservations`, { headers: { "X-API-Key": DEVKEY, "X-End-User-Id": who } }).catch(() => {});
-      process.stdout.write(dim("."));
-    }
-    // one keyless call → a denied (4xx-auth) sample, so the agent sees both sides
-    await fetch(`${DEV}/v1/restaurants/nino/reservations`).catch(() => {});
-    console.log(green(" ✓"));
-  }
+  // One keyless call too — a DENIED sample. The gateway captures all of this
+  // dev-environment traffic, so the authorization agent later reasons from
+  // real allowed AND denied requests.
+  await fetch(`${BASE}/v1/restaurants/nino/reservations`).catch(() => {});
+  console.log(dim("  (these dev calls double as the sample traffic the AI agents learn from)"));
 
   // 6 · widget key
   step("Mint the key that powers ResiResi's Developers page",
@@ -418,7 +401,7 @@ async function main() {
   const answer = (await ask(`\n${cyan("▸ Admin and Email you'll sign in as")} ${dim("[" + defaultEmail + "]")}: `)).trim();
   const OWNER = answer || defaultEmail;
   state.ownerEmail = OWNER; saveState(state);
-  const adminArgs = ["admins", "add", OWNER, "--tenant", "nino"];
+  const adminArgs = ["admins", "add", OWNER, "--tenant", TENANT];
   await pause("Press Enter to run this step", abzDisplay(adminArgs));
   await abz(adminArgs);
   console.log(dim(`\n  Done — now open  http://localhost:3003/developers  and sign in with any\n` +
@@ -427,7 +410,7 @@ async function main() {
 
   // 12 · BEFORE
   const curlFor = (email) =>
-    `curl "${PROD}/v1/restaurants/nino/reservations" \\\n` +
+    `curl "${BASE}/v1/restaurants/nino/reservations" \\\n` +
     `  -H "X-API-Key: ${DPKEY}" \\\n` +
     `  -H "X-End-User-Id: ${email}"`;
   step("BEFORE — John can see everyone's reservations",
@@ -435,7 +418,7 @@ async function main() {
     "This is John's own call — note how much he can see.");
   await pause("Press Enter to run this step", curlFor("john@nino.com"));
   {
-    const r = await httpOk(`${PROD}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
+    const r = await httpOk(`${BASE}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
     const d = await r.json();
     console.log(yellow(`  John sees ${d.data.length} reservations — his own are highlighted; the rest are other diners'. Not right.`));
     printReservations(d.data, "john@nino.com");
@@ -449,14 +432,14 @@ async function main() {
     "  " + bold("[w]idget") + "  — in Users & Groups: + New user → maria@nino.com,\n" +
     "              + New group → reservationists, then add maria as a member.\n" +
     "  " + bold("[t]erminal") + " — the lab runs these for you:\n" +
-    green(`      npx apiblaze group create reservationists --admin ${OWNER} --tenant nino\n` +
-    "      npx apiblaze group add-user maria@nino.com reservationists --tenant nino"));
+    green(`      npx apiblaze group create reservationists --admin ${OWNER} --tenant ${TENANT}\n` +
+    `      npx apiblaze group add-user maria@nino.com reservationists --tenant ${TENANT}`));
   const how = (await ask(`\n${cyan("▸ widget or terminal?")} ${dim("[t]")}: `)).trim().toLowerCase();
   if (how.startsWith("w")) {
     await pause("Done in the widget? Press Enter");
   } else {
-    await abz(["group", "create", "reservationists", "--admin", OWNER, "--tenant", "nino"]);
-    await abz(["group", "add-user", "maria@nino.com", "reservationists", "--tenant", "nino"]);
+    await abz(["group", "create", "reservationists", "--admin", OWNER, "--tenant", TENANT]);
+    await abz(["group", "add-user", "maria@nino.com", "reservationists", "--tenant", TENANT]);
     console.log(green("  reservationists ✓ (maria@nino.com is a member)"));
     console.log(dim("  Refresh the Users & Groups widget to see it there too."));
   }
@@ -464,7 +447,7 @@ async function main() {
   // 14 · agent authz
   step("Write the access rule by chatting",
     "The agent designs and enables the rule. When the chat opens, paste:\n\n" +
-    yellow('  On GET /restaurants/{restaurantId}/reservations a caller may see only\n' +
+    yellow('  On GET /v1/restaurants/{restaurantId}/reservations a caller may see only\n' +
     '  reservations whose diner_external_id matches their X-End-User-Id, unless they\n' +
     '  are in the "reservationists" group, who can see all of them.') + "\n\n" +
     dim("  Then type /enable (or follow the agent's prompt) and exit the chat."));
@@ -478,8 +461,8 @@ async function main() {
   await pause("Press Enter to run this step",
     curlFor("john@nino.com") + "\n\n" + curlFor("maria@nino.com"));
   {
-    const j = await (await httpOk(`${PROD}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" })).json();
-    const m = await (await httpOk(`${PROD}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "maria@nino.com" })).json();
+    const j = await (await httpOk(`${BASE}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" })).json();
+    const m = await (await httpOk(`${BASE}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "maria@nino.com" })).json();
     console.log(green(`\n  John (diner) — ${j.data.length} reservations, only his own:`));
     printReservations(j.data, "john@nino.com");
     console.log(green(`\n  Maria (reservationist) — ${m.data.length} reservations, all of them:`));

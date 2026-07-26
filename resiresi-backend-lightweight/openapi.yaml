@@ -9,10 +9,12 @@ info:
 
     '
 servers:
-- url: https://backend.resiresi.com/v1
+- url: http://localhost:8080
+  description: Development
+- url: http://localhost:8080
+  description: Test
+- url: http://localhost:8080
   description: Production
-- url: http://localhost:8080/v1
-  description: Local development
 components:
   schemas:
     Error:
@@ -284,7 +286,7 @@ paths:
       responses:
         '200':
           description: HTML page
-  /restaurants:
+  /v1/restaurants:
     get:
       operationId: listRestaurants
       summary: List restaurants
@@ -347,7 +349,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /restaurants/{restaurantId}:
+  /v1/restaurants/{restaurantId}:
     parameters:
     - name: restaurantId
       in: path
@@ -418,7 +420,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /restaurants/{restaurantId}/tables:
+  /v1/restaurants/{restaurantId}/tables:
     parameters:
     - name: restaurantId
       in: path
@@ -482,7 +484,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /restaurants/{restaurantId}/tables/{tableId}:
+  /v1/restaurants/{restaurantId}/tables/{tableId}:
     parameters:
     - name: restaurantId
       in: path
@@ -556,7 +558,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /restaurants/{restaurantId}/reservations:
+  /v1/restaurants/{restaurantId}/reservations:
     parameters:
     - name: restaurantId
       in: path
@@ -707,7 +709,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /restaurants/{restaurantId}/reservations/{reservationId}:
+  /v1/restaurants/{restaurantId}/reservations/{reservationId}:
     parameters:
     - name: restaurantId
       in: path
