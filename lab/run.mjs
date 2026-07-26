@@ -146,7 +146,7 @@ function commandOk(cmd, args) {
 // Pinned to an exact version (not @latest) so npx installs it ONCE and then runs
 // straight from cache on every later call — no per-command registry round-trip,
 // no repeated prompts, and the lab always runs the version it was written for.
-const ABZ = ["--yes", "apiblaze@0.19.10"];
+const ABZ = ["--yes", "apiblaze@0.19.11"];
 const abz = (args, opts) => run(NPX, [...ABZ, ...args], opts);
 const abzCapture = (args, opts) => capture(NPX, [...ABZ, ...args], opts);
 
