@@ -198,7 +198,23 @@ async function main() {
 
   await preflight();
 
-  const state = loadState();
+  let state = loadState();
+  // Checkpoints: every completed non-infra step is recorded, so a crash mid-lab
+  // resumes where it left off (infra — backend/tunnel/app — always restarts:
+  // those processes die with the lab). "Fresh" wipes local progress and mints a
+  // new proxy name; the old proxy stays on your account (delete it with
+  // `npx apiblaze delete <name> --yes` if you want it gone).
+  const markDone = (k) => { state.done = state.done || {}; state.done[k] = true; saveState(state); };
+  const isDone = (k) => !!(state.done && state.done[k]);
+  const skipNote = () => console.log(green("  ✓ already completed on a previous run — skipping"));
+
+  if (state.proxy && (state.base || (state.done && Object.keys(state.done).length))) {
+    console.log(dim(`  Found progress from an earlier run (proxy ${state.proxy}).`));
+    const a = (await ask(`${cyan("▸ resume it, or start fresh?")} ${dim("[r]esume / [f]resh")}: `)).trim().toLowerCase();
+    if (a.startsWith("f")) { state = {}; saveState(state); console.log(dim("  Starting fresh.\n")); }
+    else console.log(dim("  Resuming — finished steps will be skipped.\n"));
+  }
+
   const PROXY = state.proxy || ("resiresi" + newSuffix());
   state.proxy = PROXY; saveState(state);
   console.log("  Your unique proxy name for this run: " + green(PROXY) + "\n");
@@ -222,8 +238,14 @@ async function main() {
   step("Log in to APIblaze",
     "A later step gives your local backend a public URL through APIblaze. That needs\n" +
     "an account, so this opens your browser to log in (free to sign up).");
-  await pause("Press Enter to run this step", "apiblaze login");
-  await abz(["login"]);
+  if (isDone("login")) {
+    skipNote();
+    console.log(dim("  (if the session expired, run  npx apiblaze login  yourself and re-run)"));
+  } else {
+    await pause("Press Enter to run this step", "apiblaze login");
+    await abz(["login"]);
+    markDone("login");
+  }
 
   // 3 · create proxy FROM the OpenAPI spec — one step gives the gateway the
   // routes, the version, and the localhost targets (from the spec's `servers`).
@@ -366,11 +388,17 @@ async function main() {
     "reservations. It's a normal Next.js app in this repo. We install it, plus the\n" +
     "apiblaze package for its widgets, and give it the widget key (which stays on\n" +
     "the server, never in the browser).");
-  await pause("Press Enter to run this step", "cd resiresi-frontend && npm install && npm install apiblaze");
-  await run(NPM, ["install"], { cwd: FE });
-  await run(NPM, ["install", "apiblaze"], { cwd: FE });
-  writeFileSync(join(FE, ".env.local"), `APIBLAZE_CP_KEY=${CPKEY}\n`);
-  console.log(green("  wrote resiresi-frontend/.env.local ✓"));
+  if (isDone("install")) {
+    skipNote();
+    writeFileSync(join(FE, ".env.local"), `APIBLAZE_CP_KEY=${CPKEY}\n`);
+  } else {
+    await pause("Press Enter to run this step", "cd resiresi-frontend && npm install && npm install apiblaze");
+    await run(NPM, ["install"], { cwd: FE });
+    await run(NPM, ["install", "apiblaze"], { cwd: FE });
+    writeFileSync(join(FE, ".env.local"), `APIBLAZE_CP_KEY=${CPKEY}\n`);
+    console.log(green("  wrote resiresi-frontend/.env.local ✓"));
+    markDone("install");
+  }
 
   // 8 · wire widgets
   step("Add the two widgets to ResiResi's Developers page",
@@ -381,9 +409,14 @@ async function main() {
     "  • rr/resiresi-frontend/app/api/apiblaze/groups/route.ts\n" +
     "(the two routes keep the widget key on the server), then mounts the API-key\n" +
     "and Users & Groups widgets in rr/resiresi-frontend/app/developers/page.tsx.");
-  await pause("Press Enter to run this step");
-  wireWidgets(FE);
-  console.log(green("  3 files created + widgets mounted ✓"));
+  if (isDone("wire")) {
+    skipNote();
+  } else {
+    await pause("Press Enter to run this step");
+    wireWidgets(FE);
+    console.log(green("  3 files created + widgets mounted ✓"));
+    markDone("wire");
+  }
 
   // 9 · dev server
   step("Start ResiResi's web app",
@@ -406,8 +439,13 @@ async function main() {
   const OWNER = answer || defaultEmail;
   state.ownerEmail = OWNER; saveState(state);
   const adminArgs = ["admins", "add", OWNER, "--tenant", TENANT];
-  await pause("Press Enter to run this step", abzDisplay(adminArgs));
-  await abz(adminArgs);
+  if (isDone("admin:" + OWNER)) {
+    skipNote();
+  } else {
+    await pause("Press Enter to run this step", abzDisplay(adminArgs));
+    await abz(adminArgs);
+    markDone("admin:" + OWNER);
+  }
   console.log(dim(`\n  Done — now open  http://localhost:3003/developers  and sign in with any\n` +
     `  name and the email  ${OWNER} . Both widgets appear, ready to use.`));
   await pause("Signed in? Press Enter");
@@ -438,14 +476,19 @@ async function main() {
     "  " + bold("[t]erminal") + " — the lab runs these for you:\n" +
     green(`      npx apiblaze group create reservationists --admin ${OWNER} --tenant ${TENANT}\n` +
     `      npx apiblaze group add-user maria@nino.com reservationists --tenant ${TENANT}`));
-  const how = (await ask(`\n${cyan("▸ widget or terminal?")} ${dim("[t]")}: `)).trim().toLowerCase();
-  if (how.startsWith("w")) {
-    await pause("Done in the widget? Press Enter");
+  if (isDone("group")) {
+    skipNote();
   } else {
-    await abz(["group", "create", "reservationists", "--admin", OWNER, "--tenant", TENANT]);
-    await abz(["group", "add-user", "maria@nino.com", "reservationists", "--tenant", TENANT]);
-    console.log(green("  reservationists ✓ (maria@nino.com is a member)"));
-    console.log(dim("  Refresh the Users & Groups widget to see it there too."));
+    const how = (await ask(`\n${cyan("▸ widget or terminal?")} ${dim("[t]")}: `)).trim().toLowerCase();
+    if (how.startsWith("w")) {
+      await pause("Done in the widget? Press Enter");
+    } else {
+      await abz(["group", "create", "reservationists", "--admin", OWNER, "--tenant", TENANT]);
+      await abz(["group", "add-user", "maria@nino.com", "reservationists", "--tenant", TENANT]);
+      console.log(green("  reservationists ✓ (maria@nino.com is a member)"));
+      console.log(dim("  Refresh the Users & Groups widget to see it there too."));
+    }
+    markDone("group");
   }
 
   // 14 · agent authz
@@ -455,8 +498,15 @@ async function main() {
     '  reservations whose diner_external_id matches their X-End-User-Id, unless they\n' +
     '  are in the "reservationists" group, who can see all of them.') + "\n\n" +
     dim("  Then type /enable (or follow the agent's prompt) and exit the chat."));
-  await pause("Press Enter to open the agent", abzDisplay(["agent", "authz", PROXY]));
-  await abz(["agent", "authz", PROXY]);
+  if (isDone("authz")) {
+    console.log(green("  ✓ the rule was already enabled on a previous run"));
+    const again = (await ask(`${cyan("▸ press Enter to skip, or type a to reopen the agent")}: `)).trim().toLowerCase();
+    if (again.startsWith("a")) await abz(["agent", "authz", PROXY]);
+  } else {
+    await pause("Press Enter to open the agent", abzDisplay(["agent", "authz", PROXY]));
+    await abz(["agent", "authz", PROXY]);
+    markDone("authz");
+  }
 
   // 15 · AFTER
   step("AFTER — the rule in action",
