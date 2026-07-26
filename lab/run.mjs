@@ -227,14 +227,18 @@ async function main() {
 
   // 3 · create proxy FROM the OpenAPI spec — one step gives the gateway the
   // routes, the version, and the localhost targets (from the spec's `servers`).
+  // Tenant slug: "nino" + this run's unique suffix — tenant names are GLOBALLY
+  // unique across all of APIblaze, so a fixed "nino" would collide with anyone
+  // (including your own earlier runs).
+  const TENANT_REQ = "nino" + PROXY.slice("resiresi".length);
   const createArgs = ["create", "--name", PROXY,
     "--openapi", "resiresi-backend-lightweight/openapi.yaml",
-    "--tenant", "nino",
+    "--tenant", TENANT_REQ,
     "--auth", "api_key", "--identified", "--iam", "--json"];
-  step("Create the APIblaze proxy from your OpenAPI spec",
+  step("Create the APIblaze proxy from the resiresi OpenAPI spec",
     `This creates the APIblaze proxy  ${bold(PROXY + ".abz.run")}  — the public\n` +
     "address that will tunnel into your local backend. It's created FROM the\n" +
-    "backend's OpenAPI spec, so the gateway knows your routes from day one (the\n" +
+    "resiresi OpenAPI spec, so the gateway knows the routes from day one (the\n" +
     "AI agents use them later). Two options switch on this lab's features:\n" +
     "  • --identified — each request can say which PERSON it's for, so later a\n" +
     "    rule can give every diner only their own reservations.\n" +
@@ -249,7 +253,7 @@ async function main() {
       // captures traffic samples, so every call you see also feeds the AI agents.
       base: `https://${projectId}.abz.run/1.0.0/dev`,
       dpkey: (created.api_keys && created.api_keys.dev) || created.api_key,
-      tenant: created.tenant || "nino",
+      tenant: created.tenant || TENANT_REQ,
     };
   };
 
@@ -260,7 +264,7 @@ async function main() {
     console.log(dim("\n  You already created this proxy on an earlier run — reusing it,\n" +
       "  no need to create it again."));
     await pause("Press Enter to continue");
-    BASE = state.base; DPKEY = state.dpkey; TENANT = state.tenant || "nino";
+    BASE = state.base; DPKEY = state.dpkey; TENANT = state.tenant || TENANT_REQ;
     console.log(green("  Reusing " + BASE + " ✓"));
   } else {
     await pause("Press Enter to run this step", abzDisplay(createArgs));
