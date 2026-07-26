@@ -21,18 +21,23 @@ export const GET = handler;
 export const POST = handler;
 `;
 
-export function wireWidgets(FE) {
+export function wireWidgets(FE, suffix = "") {
   writeFileSync(
     join(FE, "lib/apiblaze-user.ts"),
     `import type { AppUser } from "apiblaze/server";
 import { getTenantSlug } from "./tenant";
 import { getUser } from "./user";
 
+// APIblaze tenant = restaurant slug + this lab run's unique suffix (tenant
+// names are globally unique across APIblaze, and a bare "nino" would pin to
+// whatever tenant an EARLIER run mapped it to). nino -> nino${suffix}.
+const TENANT_SUFFIX = "${suffix}";
+
 export function getApiblazeUser(): AppUser | null {
-  const tenant = getTenantSlug();
+  const slug = getTenantSlug();
   const user = getUser();
-  if (!tenant || !user) return null;
-  return { tenant, userId: user.email, email: user.email };
+  if (!slug || !user) return null;
+  return { tenant: slug + TENANT_SUFFIX, userId: user.email, email: user.email };
 }
 `,
   );

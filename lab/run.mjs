@@ -413,7 +413,7 @@ async function main() {
     skipNote();
   } else {
     await pause("Press Enter to run this step");
-    wireWidgets(FE);
+    wireWidgets(FE, PROXY.slice("resiresi".length));
     console.log(green("  3 files created + widgets mounted ✓"));
     markDone("wire");
   }
