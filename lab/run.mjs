@@ -7,7 +7,7 @@
  * script drives it on macOS, Linux and Windows alike (Node is already required
  * to run the apps). Launched by ../start.sh (mac/linux) or ../start.ps1 (windows).
  *
- * Everything runs on your machine: the reservation API (a tiny Node server), the platform
+ * Everything runs on your machine: the local backend (a tiny Node server), the platform
  * app, and a proxy in front of it via APIblaze's localhost tunnel.
  */
 import { spawn } from "node:child_process";
@@ -169,17 +169,17 @@ function newSuffix() {
 async function main() {
   console.log(bold("\n  ResiResi × APIblaze — guided lab\n"));
   console.log(dim("  You are ResiResi, a reservation platform with two restaurant tenants,\n" +
-    "  Nino's and Gino's. Your reservation API has no access control of its own —\n" +
+    "  Nino's and Gino's. Your backend has no access control of its own —\n" +
     "  today anyone with the address can read everyone's reservations. This lab\n" +
     "  fixes that by putting APIblaze in front of it. Everything runs on this\n" +
     "  machine; nothing is deployed anywhere.\n"));
   console.log(bold("  What you'll set up, in plain terms:\n"));
   console.log(
-    "  " + green("1.") + " Start ResiResi's reservation API on your computer.\n" +
+    "  " + green("1.") + " Start ResiResi's local backend on your computer.\n" +
     "  " + green("2.") + " Put an APIblaze " + bold("gateway") + " in front of it — a checkpoint every\n" +
     "     request passes through, so you can add rules without touching the API.\n" +
     "  " + green("3.") + " Give that gateway a public web address and link it back to your\n" +
-    "     computer, so calls to the address reach your local API.\n" +
+    "     computer, so calls to the address reach your local backend.\n" +
     "  " + green("4.") + " Add " + bold("logins, API keys, and staff groups") + " to ResiResi's app — using\n" +
     "     APIblaze's ready-made widgets, so you don't write that code yourself.\n" +
     "  " + green("5.") + " Prove it works: write one access rule, then watch a diner see only\n" +
@@ -198,9 +198,9 @@ async function main() {
   await pause("Press Enter to begin");
 
   // 1 · backend
-  step("Start the reservation API",
-    "ResiResi's reservation API. It runs on your machine in the background at\n" +
-    "http://localhost:8080 for the rest of the lab.");
+  step("Start ResiResi's local backend",
+    "The server that stores and serves the reservations. It runs on your machine\n" +
+    "in the background at http://localhost:8080 for the rest of the lab.");
   await pause("Press Enter to run this step", "node resiresi-backend-lightweight/server.js");
   startBg(process.execPath, [join(BACKEND_LW, "server.js")], { env: { ...process.env, PORT: "8080" } });
   process.stdout.write(dim("  waiting for http://localhost:8080/healthz "));
@@ -212,7 +212,7 @@ async function main() {
 
   // 2 · login
   step("Log in to APIblaze",
-    "A later step gives your local API a public URL through APIblaze. That needs\n" +
+    "A later step gives your local backend a public URL through APIblaze. That needs\n" +
     "an account, so this opens your browser to log in (free to sign up).");
   await pause("Press Enter to run this step", "apiblaze login");
   await abz(["login"]);
@@ -220,7 +220,7 @@ async function main() {
   // 3 · create proxy
   const createArgs = ["create", "--name", PROXY,
     "--target", "http://localhost:8080", "--auth", "api_key", "--identified", "--iam", "--json"];
-  step("Put APIblaze in front of your reservation API",
+  step("Put APIblaze in front of your local backend",
     "This creates a gateway that sits in front of your API. Two options switch on\n" +
     "the features this lab needs:\n" +
     "  • --identified — each request can say which PERSON it's for, so later a\n" +
@@ -284,7 +284,7 @@ async function main() {
   // 4 · tunnel
   const tunnelArgs = ["dev", "8080", "--project", PROXY, "--yes"];
   step("Connect your API to the gateway",
-    "Your API lives on your laptop; the gateway lives in the cloud. This opens a\n" +
+    "Your backend lives on your laptop; the gateway lives in the cloud. This opens a\n" +
     "secure link between them so real calls to the public URL reach your machine.\n" +
     "It keeps running in the background for the rest of the lab.");
   await pause("Press Enter to run this step", abzDisplay(tunnelArgs));

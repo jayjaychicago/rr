@@ -8,7 +8,7 @@ terminal.
 ## The scenario
 
 You are **ResiResi**, a restaurant-reservation platform with two tenants,
-**Nino's Pizza** and **Gino's Pizza**. Your reservation API is open (no keys of
+**Nino's Pizza** and **Gino's Pizza**. Your backend is open (no keys of
 its own) — access control is the gateway's job. Your task: wire in **APIblaze**
 so tenants can mint their own API keys and organise staff into groups, then prove
 an access rule works — a diner sees only their own reservations while reservation
@@ -50,7 +50,7 @@ cd rr
 The lab pauses before every step so you can read what's about to happen, then
 runs it:
 
-1. Starts the reservation API — a zero-dependency Node server, seeded in memory — and waits for it.
+1. Starts the local backend — a zero-dependency Node server, seeded in memory — and waits for it.
 2. Logs you in to APIblaze (browser) and creates a proxy — **with a unique name
    generated for your run**, so two people doing the lab never collide — pointed
    at your local API, with identity + IAM turned on.
