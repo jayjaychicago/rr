@@ -523,12 +523,23 @@ async function main() {
   await pause("Press Enter to run this step",
     curlFor("john@nino.com") + "\n\n" + curlFor("maria@nino.com"));
   {
-    const j = await (await httpOk(`${BASE}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" })).json();
-    const m = await (await httpOk(`${BASE}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "maria@nino.com" })).json();
-    console.log(green(`\n  John (diner) — ${j.data.length} reservations, only his own:`));
-    printReservations(j.data, "john@nino.com");
-    console.log(green(`\n  Maria (reservationist) — ${m.data.length} reservations, all of them:`));
-    printReservations(m.data, "john@nino.com");
+    // Never crash on a non-2xx here — with enforcement freshly ON, a denial IS
+    // a result worth showing (status + body), not an exception.
+    const show = async (who, label, expect) => {
+      const r = await fetch(`${BASE}/v1/restaurants/nino/reservations`, { headers: { "X-API-Key": DPKEY, "X-End-User-Id": who } });
+      const body = await r.json().catch(() => null);
+      if (r.ok && body && Array.isArray(body.data)) {
+        console.log(green(`\n  ${label} — ${body.data.length} reservations, ${expect}:`));
+        printReservations(body.data, "john@nino.com");
+      } else {
+        console.log(yellow(`\n  ${label} — HTTP ${r.status}`));
+        if (body) console.log(dim("    " + JSON.stringify(body).slice(0, 300)));
+        console.log(dim("    (an unexpected denial usually means the enabled rule blocks the call\n" +
+          "    outright instead of filtering — refine it with: npx apiblaze agent authz " + PROXY + ")"));
+      }
+    };
+    await show("john@nino.com", "John (diner)", "only his own");
+    await show("maria@nino.com", "Maria (reservationist)", "all of them");
   }
 
   console.log(bold(green("\n  ✓ Lab complete — one key, many people, per-person results.\n")));
