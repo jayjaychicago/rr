@@ -531,21 +531,23 @@ async function main() {
     markDone("group");
   }
 
-  // 14 · agent authz
-  step("Write the access rules by chatting",
-    "The agent designs and enables three small rules: bookings remember WHO made\n" +
-    "them, a reservation opens only for its owner (or staff), and the full list\n" +
-    "is staff-only. When the chat opens, paste this (one line, copies clean):\n\n" +
-    yellow('Bookings belong to whoever makes them. A reservation may be opened by its owner or by members of the existing group "reservationists". The full reservations list is for "reservationists" only. Leave every other route open.') + "\n\n" +
-    dim("  Then type /enable (or follow the agent's prompt) and exit the chat."));
+  // 14 · one-shot rule (plain English → enforced authorization)
+  const RULE = 'Bookings belong to whoever makes them. A reservation may be opened by its owner or by members of the existing group "reservationists". The full reservations list is for "reservationists" only. Leave every other route open.';
+  const ruleArgs = ["rule", RULE, PROXY, "--enforce"];
+  step("Write the access rules — one command, plain English",
+    "One sentence becomes enforced authorization: the AI designs the model and\n" +
+    "rules from your routes and traffic, saves them, and turns enforcement on —\n" +
+    "bookings remember WHO made them, a reservation opens only for its owner (or\n" +
+    "staff), and the full list is staff-only.");
   if (isDone("authz")) {
-    console.log(green("  ✓ the rule was already enabled on a previous run"));
-    const again = (await ask(`${cyan("▸ press Enter to skip, or type a to reopen the agent")}: `)).trim().toLowerCase();
-    if (again.startsWith("a")) await abz(["agent", "authz", PROXY]);
+    console.log(green("  ✓ the rules were already enabled on a previous run"));
+    const again = (await ask(`${cyan("▸ press Enter to skip, or type r to re-run the rule")}: `)).trim().toLowerCase();
+    if (again.startsWith("r")) await abz(ruleArgs);
   } else {
-    await pause("Press Enter to open the agent", abzDisplay(["agent", "authz", PROXY]));
-    await abz(["agent", "authz", PROXY]);
+    await pause("Press Enter to run this step", `npx apiblaze rule "${RULE}" ${PROXY} --enforce`);
+    await abz(ruleArgs);
     markDone("authz");
+    console.log(dim("  (want to refine it later? chat interactively: npx apiblaze agent authz " + PROXY + ")"));
   }
 
   // 15 · AFTER — the full story in four calls.
