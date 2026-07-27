@@ -562,8 +562,13 @@ async function main() {
     const H = (who) => ({ "X-API-Key": DPKEY, "X-End-User-Id": who, "Content-Type": "application/json" });
     const outcome = (n, label, ok, detail) =>
       console.log((ok ? green : yellow)(`  ${n}. ${label} — ${detail}${ok ? " ✓" : ""}`));
+    // Every beat shows its exact curl — copy-paste-able, nothing hidden.
+    const curlGet = (who, id) =>
+      `curl "${BASE}/v1/restaurants/nino/reservations/${id}" -H "X-API-Key: ${DPKEY}" -H "X-End-User-Id: ${who}"`;
+    const showCurl = (c2) => console.log(dim("     $ " + c2));
 
     // 1 · John books
+    showCurl(`curl -X POST "${BASE}/v1/restaurants/nino/reservations" -H "X-API-Key: ${DPKEY}" -H "X-End-User-Id: john@nino.com" -H "Content-Type: application/json" -d '{"diner_name":"John Diner","diner_external_id":"john@nino.com","party_size":2,"starts_at":"…"}'`);
     const br = await fetch(listUrl, { method: "POST", headers: H("john@nino.com"),
       body: JSON.stringify({ diner_name: "John Diner", diner_external_id: "john@nino.com",
         party_size: 2, starts_at: new Date(Date.now() + 86400000).toISOString() }) });
@@ -573,6 +578,7 @@ async function main() {
 
     // 2 · John reads his own
     if (JOHN_RESI) {
+      showCurl(curlGet("john@nino.com", JOHN_RESI));
       const r2 = await fetch(`${listUrl}/${JOHN_RESI}`, { headers: H("john@nino.com") });
       outcome(2, "John opens HIS reservation", r2.ok, `HTTP ${r2.status}`);
     } else {
@@ -581,12 +587,14 @@ async function main() {
 
     // 3 · John tries Maria's
     if (MARIA_RESI) {
+      showCurl(curlGet("john@nino.com", MARIA_RESI));
       const r3 = await fetch(`${listUrl}/${MARIA_RESI}`, { headers: H("john@nino.com") });
       outcome(3, "John tries MARIA'S reservation", !r3.ok, `HTTP ${r3.status}${!r3.ok ? " · blocked" : " — expected a denial! (is Enforce Authorization on?)"}`);
     }
 
     // 4 · Maria (staff) reads John's
     if (JOHN_RESI) {
+      showCurl(curlGet("maria@nino.com", JOHN_RESI));
       const r4 = await fetch(`${listUrl}/${JOHN_RESI}`, { headers: H("maria@nino.com") });
       outcome(4, "Maria (staff) opens John's", r4.ok, `HTTP ${r4.status}${r4.ok ? " · reservationists see everything" : " — expected 200: is maria in the group?"}`);
     }
