@@ -544,7 +544,7 @@ async function main() {
     const again = (await ask(`${cyan("▸ press Enter to skip, or type r to re-run the rule")}: `)).trim().toLowerCase();
     if (again.startsWith("r")) await abz(ruleArgs);
   } else {
-    await pause("Press Enter to run this step", `npx apiblaze rule "${RULE}" ${PROXY} --enforce`);
+    await pause("Press Enter to run this step", `npx apiblaze rule "${RULE.replace(/"/g, '\\"')}" ${PROXY} --enforce`);
     await abz(ruleArgs);
     markDone("authz");
     console.log(dim("  (want to refine it later? chat interactively: npx apiblaze agent authz " + PROXY + ")"));
