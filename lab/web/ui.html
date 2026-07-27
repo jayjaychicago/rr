@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ResiResi × APIblaze — lab</title>
+<style>
+  :root {
+    --bg: #0b0b10; --panel: #14141c; --card: #1a1a24; --edge: #2a2a38;
+    --text: #e6e6ef; --dim: #9a9aad; --accent: #8b5cf6; --accent2: #a78bfa;
+    --green: #34d399; --yellow: #fbbf24; --red: #f87171; --cyan: #67e8f9;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: grid; grid-template-rows: 48px 1fr; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 0 16px;
+    background: var(--panel); border-bottom: 1px solid var(--edge);
+  }
+  header .logo { font-weight: 700; }
+  header .logo em { color: var(--accent2); font-style: normal; }
+  #chips { display: flex; gap: 8px; overflow-x: auto; }
+  .chip {
+    font: 12px ui-monospace, monospace; background: var(--card); border: 1px solid var(--edge);
+    border-radius: 999px; padding: 3px 10px; white-space: nowrap; color: var(--dim);
+  }
+  .chip b { color: var(--accent2); font-weight: 600; margin-right: 6px; }
+  main {
+    display: grid; grid-template-columns: 430px 1fr 1fr; gap: 10px;
+    padding: 10px; min-height: 0;
+  }
+  /* ── left rail ── */
+  #rail {
+    overflow-y: auto; display: flex; flex-direction: column; gap: 10px; min-height: 0;
+    padding-right: 2px;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--edge); border-radius: 12px;
+    padding: 12px 14px; flex-shrink: 0;
+  }
+  .card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .card h3 { margin: 0 0 6px; font-size: 14px; display: flex; gap: 8px; align-items: baseline; }
+  .card h3 .n {
+    background: var(--accent); color: #fff; border-radius: 6px; font-size: 11px;
+    padding: 1px 7px; flex-shrink: 0;
+  }
+  .card h3 .tick { margin-left: auto; color: var(--green); }
+  .explain { color: var(--dim); white-space: pre-wrap; font-size: 13px; }
+  .cmd {
+    position: relative; margin-top: 8px; background: #0e0e15; border: 1px solid var(--edge);
+    border-radius: 8px; padding: 8px 34px 8px 10px;
+    font: 12px ui-monospace, monospace; color: var(--green); white-space: pre-wrap; word-break: break-all;
+  }
+  .copy {
+    position: absolute; top: 5px; right: 5px; background: var(--card); color: var(--dim);
+    border: 1px solid var(--edge); border-radius: 6px; cursor: pointer; font-size: 11px; padding: 2px 7px;
+  }
+  .copy:hover { color: var(--text); }
+  .actions { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  button.run {
+    background: var(--accent); border: 0; color: #fff; font-weight: 600; font-size: 13px;
+    border-radius: 8px; padding: 7px 16px; cursor: pointer;
+  }
+  button.run:hover { background: var(--accent2); }
+  button.alt {
+    background: var(--card); border: 1px solid var(--edge); color: var(--text);
+    border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 13px;
+  }
+  button.alt:hover { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  input.ask {
+    background: #0e0e15; border: 1px solid var(--edge); color: var(--text);
+    border-radius: 8px; padding: 7px 10px; font: 13px ui-monospace, monospace; min-width: 220px;
+  }
+  input.ask:focus { outline: none; border-color: var(--accent); }
+  .promptmsg { color: var(--cyan); margin-top: 10px; font-weight: 600; }
+  .log {
+    margin-top: 8px; background: #0e0e15; border: 1px solid var(--edge); border-radius: 8px;
+    padding: 8px 10px; font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap;
+    word-break: break-word; max-height: 240px; overflow-y: auto; color: #c9c9d6;
+  }
+  .log:empty { display: none; }
+  .log a { color: var(--cyan); }
+  .b { font-weight: 700; } .dimc { color: var(--dim); } .greenc { color: var(--green); }
+  .yellowc { color: var(--yellow); } .redc { color: var(--red); } .cyanc { color: var(--cyan); }
+  table.resis { border-collapse: collapse; margin: 6px 0; font: 12px ui-monospace, monospace; width: 100%; }
+  table.resis td { padding: 3px 8px; border-bottom: 1px solid var(--edge); color: var(--dim); }
+  table.resis tr.hl td { color: var(--green); }
+  .banner-fatal, .banner-done {
+    border-radius: 12px; padding: 12px 14px; font-weight: 600;
+  }
+  .banner-fatal { background: #2a1515; border: 1px solid var(--red); color: var(--red); white-space: pre-wrap; }
+  .banner-done { background: #12241c; border: 1px solid var(--green); color: var(--green); }
+  /* ── panes ── */
+  .pane { display: grid; grid-template-rows: 34px auto 1fr; min-height: 0;
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 12px; overflow: hidden;
+    transition: box-shadow .3s, border-color .3s; }
+  .pane.glow { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  .pane .bar {
+    display: flex; align-items: center; gap: 8px; padding: 0 10px; background: var(--card);
+    border-bottom: 1px solid var(--edge); font-size: 12px;
+  }
+  .pane .bar .t { font-weight: 700; }
+  .pane .bar .u { color: var(--dim); font: 11px ui-monospace, monospace; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .pane .bar a { color: var(--accent2); text-decoration: none; font-size: 11px; white-space: nowrap; }
+  .pane .bar button { background: none; border: 1px solid var(--edge); color: var(--dim);
+    border-radius: 6px; font-size: 11px; cursor: pointer; padding: 1px 8px; }
+  .pane .banner {
+    display: none; gap: 10px; align-items: center; padding: 8px 12px; font-size: 13px;
+    background: #221a38; border-bottom: 1px solid var(--accent); color: var(--accent2);
+  }
+  .pane .banner.show { display: flex; flex-wrap: wrap; }
+  .pane .banner .note { flex: 1; min-width: 200px; }
+  .pane .banner a, .pane .banner .copy2 {
+    background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 4px 10px;
+    font-size: 12px; cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .pane .banner .dismiss { background: none; border: 0; color: var(--dim); cursor: pointer; font-size: 14px; }
+  .pane iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+  .pane .placeholder {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; color: var(--dim); gap: 8px; text-align: center; padding: 20px;
+  }
+  .pane .placeholder .big { font-size: 34px; }
+  .spin { display: inline-block; width: 30px; overflow: hidden; vertical-align: bottom; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">ResiResi <span style="color:var(--dim)">×</span> <em>APIblaze</em> <span style="color:var(--dim);font-weight:400">— guided lab</span></div>
+  <div id="chips"></div>
+</header>
+<main>
+  <div id="rail"></div>
+
+  <div class="pane" id="pane-resiresi">
+    <div class="bar"><span class="t">ResiResi · Developers</span><span class="u"></span>
+      <button onclick="reloadPane('resiresi')">↻</button><a target="_blank" href="#" class="ext" style="display:none">open in tab ↗</a></div>
+    <div class="banner"><span class="note"></span><span class="slots"></span><button class="dismiss" onclick="hideBanner('resiresi')">✕</button></div>
+    <div class="body"><div class="placeholder"><div class="big">🧩</div>
+      <div><b>ResiResi's Developers page</b> appears here<br>once its app starts (around step 8).</div></div></div>
+  </div>
+
+  <div class="pane" id="pane-nino">
+    <div class="bar"><span class="t">Nino's Pizza · storefront</span><span class="u"></span>
+      <button onclick="reloadPane('nino')">↻</button><a target="_blank" href="#" class="ext" style="display:none">open in tab ↗</a></div>
+    <div class="banner"><span class="note"></span><span class="slots"></span><button class="dismiss" onclick="hideBanner('nino')">✕</button></div>
+    <div class="body"><div class="placeholder"><div class="big">🍕</div>
+      <div><b>Nino's Pizza</b> — a real storefront calling the API<br>through your proxy — appears in the prove phase.</div></div></div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const rail = document.getElementById("rail");
+const chips = document.getElementById("chips");
+const $ = (sel, el = document) => el.querySelector(sel);
+
+// ── ANSI → HTML (same codes the terminal driver uses) ────────────────────────
+const CLS = { "1": "b", "2": "dimc", "31": "redc", "32": "greenc", "33": "yellowc", "36": "cyanc" };
+const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function ansi(text) {
+  let html = "", open = [];
+  for (const part of String(text).split(/(\x1b\[[0-9;]*m)/)) {
+    const m = part.match(/^\x1b\[([0-9;]*)m$/);
+    if (m) {
+      for (const code of (m[1] || "0").split(";")) {
+        // 0 = reset; 22/23/24/39/49 are chalk's per-style closers — treating
+        // them all as "close everything" keeps nesting simple and safe.
+        if (["0", "", "22", "23", "24", "39", "49"].includes(code)) {
+          html += "</span>".repeat(open.length); open = [];
+        } else if (CLS[code]) { html += `<span class="${CLS[code]}">`; open.push(code); }
+      }
+    } else if (part) {
+      html += linkify(esc(part));
+    }
+  }
+  html += "</span>".repeat(open.length);
+  return html;
+}
+// URLs in logs (e.g. the login confirm URL) become clickable.
+const linkify = (escaped) =>
+  escaped.replace(/(https?:\/\/[^\s"'<]+)/g, '<a href="$1" target="_blank">$1</a>');
+
+// ── rail cards ───────────────────────────────────────────────────────────────
+let currentCard = null;
+function newCard(inner) {
+  const div = document.createElement("div");
+  div.className = "card";
+  div.innerHTML = inner;
+  rail.appendChild(div);
+  for (const el of rail.querySelectorAll(".card.active")) el.classList.remove("active");
+  div.classList.add("active");
+  div.scrollIntoView({ behavior: "smooth", block: "end" });
+  currentCard = div;
+  return div;
+}
+function ensureCard() {
+  return currentCard ?? newCard("");
+}
+function logInto(card, html) {
+  let log = card.querySelector(".log:last-of-type");
+  // Keep one running log block per card, appended after whatever exists.
+  if (!log || log.dataset.closed) {
+    log = document.createElement("div");
+    log.className = "log";
+    card.appendChild(log);
+  }
+  log.insertAdjacentHTML("beforeend", html);
+  log.scrollTop = log.scrollHeight;
+  card.scrollIntoView({ behavior: "smooth", block: "end" });
+  return log;
+}
+
+async function send(id, value) {
+  await fetch("/action", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, value }) });
+}
+
+// ── panes ────────────────────────────────────────────────────────────────────
+const paneState = {};
+function mountPane(name, url) {
+  const pane = document.getElementById("pane-" + name);
+  const body = $(".body", pane);
+  if (!paneState[name] || paneState[name].url !== url) {
+    body.innerHTML = `<iframe src="${url}"></iframe>`;
+    paneState[name] = { url };
+  }
+  $(".bar .u", pane).textContent = url;
+  const ext = $(".bar .ext", pane); ext.href = url; ext.style.display = "";
+  glow(name);
+}
+function reloadPane(name) {
+  const f = $("#pane-" + name + " iframe");
+  if (f) f.src = f.src;
+}
+function navPane(name, url) {
+  const f = $("#pane-" + name + " iframe");
+  if (f) f.src = url; else mountPane(name, url);
+  glow(name);
+}
+function glow(name) {
+  const pane = document.getElementById("pane-" + name);
+  pane.classList.add("glow");
+  setTimeout(() => pane.classList.remove("glow"), 2600);
+}
+function showBanner(name, e) {
+  const pane = document.getElementById("pane-" + name);
+  const banner = $(".banner", pane);
+  $(".note", banner).textContent = e.note || "";
+  const slots = $(".slots", banner);
+  slots.innerHTML = "";
+  if (e.copy) {
+    const b = document.createElement("button");
+    b.className = "copy2"; b.textContent = "copy " + e.copy;
+    b.onclick = () => { navigator.clipboard.writeText(e.copy); b.textContent = "copied ✓"; };
+    slots.appendChild(b);
+  }
+  for (const l of [e.url ? { label: "go →", url: e.url } : null, e.link, e.link2].filter(Boolean)) {
+    const a = document.createElement("a");
+    a.textContent = l.label; a.href = "#";
+    a.onclick = (ev) => { ev.preventDefault(); navPane(name, l.url); };
+    slots.appendChild(a);
+  }
+  banner.classList.add("show");
+  glow(name);
+}
+function hideBanner(name) { $("#pane-" + name + " .banner").classList.remove("show"); }
+
+// ── event handling ───────────────────────────────────────────────────────────
+let progressLine = null;
+const handlers = {
+  step(e) {
+    newCard(`<h3><span class="n">${e.n}</span> ${esc(e.title)}<span class="tick"></span></h3>` +
+      (e.explain ? `<div class="explain">${ansi(e.explain)}</div>` : ""));
+  },
+  log(e) {
+    logInto(ensureCard(), ansi(e.text));
+  },
+  prompt(e) {
+    const card = ensureCard();
+    const wrap = document.createElement("div");
+    wrap.dataset.prompt = "p" + e.seq;
+    let inner = "";
+    if (e.cmd) inner += `<div class="cmd">${esc(e.cmd)}<button class="copy">copy</button></div>`;
+    inner += `<div class="promptmsg">▸ ${esc(e.msg)}</div><div class="actions"></div>`;
+    wrap.innerHTML = inner;
+    const copyBtn = $(".copy", wrap);
+    if (copyBtn) copyBtn.onclick = () => { navigator.clipboard.writeText(e.cmd); copyBtn.textContent = "copied ✓"; };
+    const actions = $(".actions", wrap);
+    const id = "p" + e.seq;
+    if (e.kind === "pause") {
+      const b = document.createElement("button");
+      b.className = "run"; b.textContent = e.cmd ? "Run" : "Continue";
+      b.onclick = () => { b.disabled = true; send(id, ""); };
+      actions.appendChild(b);
+    } else if (e.kind === "input") {
+      const inp = document.createElement("input");
+      inp.className = "ask"; inp.value = e.def || ""; inp.placeholder = e.def || "";
+      const b = document.createElement("button");
+      b.className = "run"; b.textContent = "OK";
+      const go = () => { b.disabled = true; inp.disabled = true; send(id, inp.value); };
+      b.onclick = go; inp.onkeydown = (ev) => { if (ev.key === "Enter") go(); };
+      actions.append(inp, b);
+    } else if (e.kind === "choice") {
+      for (const o of e.options) {
+        const b = document.createElement("button");
+        b.className = o.key === e.defKey ? "run" : "alt";
+        b.textContent = o.label;
+        b.onclick = () => { for (const x of actions.children) x.disabled = true; send(id, o.key); };
+        actions.appendChild(b);
+      }
+    }
+    card.appendChild(wrap);
+    card.scrollIntoView({ behavior: "smooth", block: "end" });
+  },
+  answered(e) {
+    // A prompt was resolved (maybe in another tab / replay): disable its controls.
+    const wrap = document.querySelector(`[data-prompt="${e.id}"]`);
+    if (wrap) for (const b of wrap.querySelectorAll("button.run, button.alt, input")) b.disabled = true;
+    const card = ensureCard();
+    const log = card.querySelector(".log:last-of-type");
+    if (log) log.dataset.closed = "1"; // next log output opens a fresh block below the prompt
+  },
+  progress(e) {
+    progressLine = logInto(ensureCard(), `<div>${ansi(e.label)}<span class="spin"></span></div>`);
+  },
+  "progress-tick"() {
+    const spin = progressLine && progressLine.querySelector("div:last-child .spin");
+    if (spin) spin.textContent = (spin.textContent + "·").slice(-6);
+  },
+  "progress-end"(e) {
+    const spin = progressLine && progressLine.querySelector("div:last-child .spin");
+    if (spin) spin.outerHTML = " " + ansi(e.text);
+    const card = ensureCard();
+    const tick = card.querySelector("h3 .tick");
+    if (tick && /✓/.test(e.text || "")) tick.textContent = "";
+  },
+  reservations(e) {
+    const rowsHtml = (e.rows || []).map((r) =>
+      `<tr${e.highlight && r.email === e.highlight ? ' class="hl"' : ""}>` +
+      `<td>${esc(r.when)}</td><td>${esc(r.status)}</td><td>party ${esc(r.party)}</td>` +
+      `<td>${esc(r.who)}${r.email ? " &lt;" + esc(r.email) + "&gt;" : ""}</td></tr>`).join("");
+    logInto(ensureCard(), `<table class="resis">${rowsHtml || '<tr><td>(none)</td></tr>'}</table>`);
+  },
+  chip(e) {
+    let el = chips.querySelector(`[data-k="${e.key}"]`);
+    if (!el) { el = document.createElement("span"); el.className = "chip"; el.dataset.k = e.key; chips.appendChild(el); }
+    el.innerHTML = `<b>${esc(e.key)}</b>${esc(e.value)}`;
+  },
+  pane(e) {
+    if (e.pane !== "resiresi" && e.pane !== "nino") return;
+    if (e.kind === "mount" && e.url) {
+      mountPane(e.pane, e.url);
+      if (e.note) showBanner(e.pane, { note: e.note });
+    }
+    if (e.kind === "refresh") reloadPane(e.pane);
+    if (e.kind === "banner") showBanner(e.pane, e);
+  },
+  await() { /* the matching prompt's controls are already live */ },
+  done() {
+    const d = document.createElement("div");
+    d.className = "banner-done";
+    d.textContent = "✓ Lab complete — one key, many people: owners see their own, staff see all.";
+    rail.appendChild(d); d.scrollIntoView({ behavior: "smooth" });
+  },
+  fatal(e) {
+    const d = document.createElement("div");
+    d.className = "banner-fatal";
+    d.textContent = "✗ " + e.message + "\nFix the issue, then restart ./launch.sh — the lab resumes where it left off.";
+    rail.appendChild(d); d.scrollIntoView({ behavior: "smooth" });
+  },
+};
+
+const es = new EventSource("/events");
+es.onmessage = (m) => {
+  const e = JSON.parse(m.data);
+  const h = handlers[e.type];
+  if (h) h(e);
+};
+es.onerror = () => {
+  // Server gone (Ctrl-C). Leave the page as-is; a banner would be noise on reload.
+};
+</script>
+</body>
+</html>

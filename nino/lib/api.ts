@@ -120,6 +120,24 @@ export async function listMyReservations(
   return data.data as Reservation[];
 }
 
+export async function getReservation(
+  reservationId: string,
+  dinerId: string,
+  config?: ApiBlazeConfig,
+  oauthToken?: string
+): Promise<Reservation> {
+  // Open a single reservation BY ID — the demo's pivotal call: before the
+  // gateway rules, any signed-in diner can open anyone's booking this way;
+  // after, the gateway returns 403 unless dinerId owns it (or is staff).
+  return apiFetch(
+    `/restaurants/${RESTAURANT_ID}/reservations/${reservationId}`,
+    undefined,
+    config,
+    oauthToken,
+    dinerId
+  ) as Promise<Reservation>;
+}
+
 export async function cancelReservation(
   reservationId: string,
   config?: ApiBlazeConfig,

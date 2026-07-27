@@ -1,9 +1,17 @@
-# The ResiResi lab — guided, in your terminal
+# The ResiResi lab — guided
 
 Instead of following the walkthrough by hand, run one script that **explains each
 step, pauses, runs it, and shows the result** — the whole "put APIblaze in front
-of your API and add per-user access control" exercise without leaving the
-terminal.
+of your API and add per-user access control" exercise.
+
+Two ways to run the same lab:
+
+- **`./launch.sh` — in your browser (recommended).** One screen, three panes:
+  the steps on the left, ResiResi's Developers page and Nino's Pizza storefront
+  live on the right — so you *watch* the widgets appear and a diner get blocked
+  in a real UI as each step lands.
+- **`./start.sh` — in your terminal.** Same steps, same commands, no browser
+  chrome.
 
 ## The scenario
 
@@ -34,16 +42,18 @@ cd rr
 **macOS / Linux:**
 
 ```
-./start.sh
+./launch.sh       # browser version (three panes)
+./start.sh        # terminal version
 ```
 
 **Windows (PowerShell):**
 
 ```
-.\start.ps1
+.\launch.ps1      # browser version (three panes)
+.\start.ps1       # terminal version
 ```
 
-(If Windows blocks it: `powershell -ExecutionPolicy Bypass -File .\start.ps1`.)
+(If Windows blocks it: `powershell -ExecutionPolicy Bypass -File .\launch.ps1`.)
 
 ## What it does
 
@@ -59,13 +69,15 @@ runs it:
 5. Installs the platform app, writes its `.env.local`, and **wires the two
    widgets** for you (the exact files the manual guide has you write).
 6. Starts the app, has you sign in, and crowns you the first tenant admin.
-7. Walks the before/after: John (a diner) sees everyone's reservations → you add
-   staff to a group and chat an access rule into place → John now sees only his,
-   while Maria (a reservationist) still sees all.
+7. Walks the before/after: John (a diner) can open Maria's reservation → you put
+   staff in a group and turn one plain-English sentence into enforced rules
+   (`npx apiblaze rule "…" --enforce`) → John's own booking still opens, Maria's
+   is refused, and Maria (a reservationist) still sees everything. In the
+   browser version this plays out live on Nino's storefront too.
 
 A few steps need you (they're the point): completing the browser login, signing
-into the app, creating a group in the widget, and typing the rule into the
-authz-agent chat. The lab tells you exactly what to do and waits.
+into the app, and optionally creating the group in the widget. The lab tells
+you exactly what to do and waits.
 
 **Cleanup:** the lab stops the backend, app and tunnel when it exits.
 

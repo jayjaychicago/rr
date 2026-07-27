@@ -1,76 +1,26 @@
 #!/usr/bin/env node
 /**
- * ResiResi × APIblaze — guided lab.
+ * ResiResi × APIblaze — guided lab, TERMINAL driver (./start.sh / .\start.ps1).
  *
- * Explains each step, waits for you to press Enter, runs it, and shows the
- * result — the whole "Full test project" without leaving the terminal. One Node
- * script drives it on macOS, Linux and Windows alike (Node is already required
- * to run the apps). Launched by ../start.sh (mac/linux) or ../start.ps1 (windows).
- *
- * Everything runs on your machine: the local backend (a tiny Node server), the platform
- * app, and a proxy in front of it via APIblaze's localhost tunnel.
+ * The step sequence + all copy live in ./steps.mjs (shared with the browser
+ * driver, lab/web/server.mjs). This file only adapts it to a terminal: ANSI
+ * styling, readline pauses, and spawn with inherited stdio so interactive
+ * children (the APIblaze login) own the keyboard while they run.
  */
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { writeFileSync, readFileSync, openSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-import { wireWidgets } from "./wire.mjs";
+import { runLab, isWin } from "./steps.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const FE = join(ROOT, "resiresi-frontend");
-const BACKEND_LW = join(ROOT, "resiresi-backend-lightweight");
-const isWin = process.platform === "win32";
-const NPX = isWin ? "npx.cmd" : "npx";
-const NPM = isWin ? "npm.cmd" : "npm";
-
-// ── tiny ui ────────────────────────────────────────────────────────────────
-const c = (n, s) => `\x1b[${n}m${s}\x1b[0m`;
-const bold = (s) => c(1, s), cyan = (s) => c(36, s), green = (s) => c(32, s),
-      yellow = (s) => c(33, s), dim = (s) => c(2, s), red = (s) => c(31, s);
-const rl = createInterface({ input: process.stdin, output: process.stdout });
-const ask = (q) => new Promise((res) => rl.question(q, res));
-
-// Show the exact command a step is about to run, THEN wait for Enter — so nothing
-// runs before the user has seen what it is. `cmd` is the friendly command string
-// (or a short "what happens" line for steps that aren't a single command).
-function pause(msg = "Press Enter to run this step", cmd) {
-  if (cmd) console.log("\n" + dim("  about to run:") + "\n    " + green(cmd));
-  return ask(`\n${cyan("▸ " + msg)} `);
-}
-
-// Friendly display form of an APIblaze invocation: the real `npx apiblaze …`
-// command the user would type, minus only the machine-only --json flag.
-const abzDisplay = (args) => "npx apiblaze " + args.filter((a) => a !== "--json").join(" ");
-
-// Render a reservations list as a compact, readable table instead of a bare
-// count — so the user can actually SEE whose reservations came back (the whole
-// point of the before/after). `highlight` bolds rows belonging to one diner.
-const fmtWhen = (iso) => {
-  try {
-    return new Date(iso).toLocaleString("en-US",
-      { weekday: "short", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
-  } catch { return iso || "—"; }
+// ── styling ──────────────────────────────────────────────────────────────────
+const c = (n, str) => `\x1b[${n}m${str}\x1b[0m`;
+const s = {
+  bold: (t) => c(1, t), cyan: (t) => c(36, t), green: (t) => c(32, t),
+  yellow: (t) => c(33, t), dim: (t) => c(2, t), red: (t) => c(31, t),
 };
-function printReservations(rows, highlight) {
-  if (!rows || !rows.length) { console.log(dim("    (none)")); return; }
-  for (const r of rows) {
-    const who = r.diner_name || r.diner_external_id || "—";
-    const email = r.diner_external_id || r.diner_email || "";
-    const line = "    " + fmtWhen(r.starts_at).padEnd(22) +
-      "  " + String(r.status || "").padEnd(9) +
-      "  party " + String(r.party_size ?? "?").padEnd(2) +
-      "  " + who + (email ? "  <" + email + ">" : "");
-    console.log(highlight && email === highlight ? green(line) : dim(line));
-  }
-}
 
-let N = 0;
-function step(title, explain) {
-  N++;
-  console.log("\n" + bold(`━━ Step ${N} · ${title} ` + "━".repeat(Math.max(0, 46 - title.length))));
-  if (explain) console.log(explain.split("\n").map((l) => dim(l)).join("\n"));
-}
+// ── readline (single instance; released to children while they run) ──────────
+const rl = createInterface({ input: process.stdin, output: process.stdout });
+const rlAsk = (q) => new Promise((res) => rl.question(q, res));
 
 // ── process helpers ──────────────────────────────────────────────────────────
 const bg = []; // background children to clean up on exit
@@ -83,11 +33,11 @@ process.on("SIGINT", () => { cleanup(); process.exit(130); });
 /** Run a command, inheriting the terminal (interactive prompts work). Awaits exit.
  *  CRITICAL: the lab's own readline must let go of stdin while the child runs —
  *  otherwise both processes race for keystrokes and the child's prompts (e.g.
- *  the login team picker) eat every other Enter. rl.pause() releases stdin to
- *  the child; resume when it exits so the next "Press Enter" works. */
+ *  the login flow) eat every other Enter. rl.pause() releases stdin to the
+ *  child; resume when it exits so the next "Press Enter" works. */
 function run(cmd, args, opts = {}) {
   const shown = [cmd, ...args].join(" ");
-  console.log(dim("$ " + shown));
+  console.log(s.dim("$ " + shown));
   rl.pause();
   return new Promise((res, rej) => {
     const p = spawn(cmd, args, { stdio: "inherit", shell: isWin, ...opts });
@@ -100,7 +50,7 @@ function run(cmd, args, opts = {}) {
 /** Run and capture stdout (still echoes to the user). Same stdin handoff as run(). */
 function capture(cmd, args, opts = {}) {
   const shown = [cmd, ...args].join(" ");
-  console.log(dim("$ " + shown));
+  console.log(s.dim("$ " + shown));
   rl.pause();
   return new Promise((res, rej) => {
     const p = spawn(cmd, args, { stdio: ["inherit", "pipe", "inherit"], shell: isWin, ...opts });
@@ -112,504 +62,64 @@ function capture(cmd, args, opts = {}) {
   });
 }
 
-/** Start a long-running process in the background; tracked for cleanup. */
-function startBg(cmd, args, opts = {}) {
-  const p = spawn(cmd, args, { stdio: "ignore", shell: isWin, detached: false, ...opts });
-  bg.push(p);
-  return p;
-}
-
-async function waitFor(fn, { tries = 60, delay = 1000, what = "service" } = {}) {
-  for (let i = 0; i < tries; i++) {
-    try { if (await fn()) return true; } catch {}
-    await new Promise((r) => setTimeout(r, delay));
-  }
-  throw new Error(`Timed out waiting for ${what}.`);
-}
-
-async function httpOk(url, headers = {}) {
-  const r = await fetch(url, { headers });
-  return r.ok ? r : null;
-}
-
-/** True if `cmd args` runs and exits 0. Used for presence + daemon checks. */
-function commandOk(cmd, args) {
-  return new Promise((res) => {
-    const p = spawn(cmd, args, { stdio: "ignore", shell: isWin });
-    p.on("error", () => res(false));
-    p.on("close", (code) => res(code === 0));
-  });
-}
-
-// Every APIblaze call goes through npx with --yes, so npx fetches the CLI once
-// (first use) WITHOUT its interactive "Ok to proceed?" prompt, then reuses it.
-// Pinned to an exact version (not @latest) so npx installs it ONCE and then runs
-// straight from cache on every later call — no per-command registry round-trip,
-// no repeated prompts, and the lab always runs the version it was written for.
-const ABZ = ["--yes", "apiblaze@0.19.14"];
-const abz = (args, opts) => run(NPX, [...ABZ, ...args], opts);
-const abzCapture = (args, opts) => capture(NPX, [...ABZ, ...args], opts);
-
-async function preflight() {
-  step("Check your tools", "This lab needs Node 20+ and npx (both ship with Node.js).");
-  await pause();
-  const major = Number(process.versions.node.split(".")[0]);
-  if (major < 20) throw new Error(`Node 20+ required — you have ${process.versions.node}. https://nodejs.org`);
-  if (!(await commandOk(NPX, ["--version"]))) throw new Error("npx not found — reinstall Node.js. https://nodejs.org");
-  console.log(green(`  Node ${process.versions.node} · npx ✓`));
-  console.log(dim("  Fetching the APIblaze CLI via npx (first time only)…"));
-  await run(NPX, [...ABZ, "--version"]);
-  console.log(green("  APIblaze CLI ready ✓"));
-}
-
-// ── lab state (so the same suffix is reused across a run) ────────────────────
-const STATE = join(ROOT, "lab", ".state.json");
-function loadState() { try { return JSON.parse(readFileSync(STATE, "utf8")); } catch { return {}; } }
-function saveState(s) { writeFileSync(STATE, JSON.stringify(s, null, 2)); }
-
-function newSuffix() {
-  const alph = "abcdefghjkmnpqrstuvwxyz23456789";
-  let s = ""; for (let i = 0; i < 4; i++) s += alph[Math.floor(Math.random() * alph.length)];
-  return s;
-}
-
-// ── the lab ──────────────────────────────────────────────────────────────────
-async function main() {
-  console.log(bold("\n  ResiResi × APIblaze — guided lab\n"));
-  console.log(dim("  You are ResiResi, a reservation platform with two restaurant tenants,\n" +
-    "  Nino's and Gino's. Your backend has no access control of its own —\n" +
-    "  today anyone with the address can read everyone's reservations. This lab\n" +
-    "  fixes that by putting APIblaze in front of it. Everything runs on this\n" +
-    "  machine; nothing is deployed anywhere.\n"));
-  console.log(bold("  What you'll set up, in plain terms:\n"));
-  console.log(
-    "  " + green("1.") + " Start ResiResi's local backend on your computer.\n" +
-    "  " + green("2.") + " Put an APIblaze " + bold("gateway") + " in front of it — a checkpoint every\n" +
-    "     request passes through, so you can add rules without touching the API.\n" +
-    "  " + green("3.") + " Give that gateway a public web address and link it back to your\n" +
-    "     computer, so calls to the address reach your local backend.\n" +
-    "  " + green("4.") + " Add " + bold("logins, API keys, and staff groups") + " to ResiResi's app — using\n" +
-    "     APIblaze's ready-made widgets, so you don't write that code yourself.\n" +
-    "  " + green("5.") + " Prove it works: John could open Maria's reservation before — after the\n" +
-    "     rules, he can't (but his own still works, and staff see everything).\n");
-  console.log(dim("  Requirements: Node 20+ and a free APIblaze account (one browser login,\n" +
-    "  for the step that gives your API a public address). Ctrl-C any time;\n" +
-    "  re-run to resume where you left off.\n"));
-
-  let state = loadState();
-  // Checkpoints: every completed non-infra step is recorded, so a crash mid-lab
-  // resumes where it left off (infra — backend/tunnel/app — always restarts:
-  // those processes die with the lab). "Fresh" wipes local progress and mints a
-  // new proxy name; the old proxy stays on your account (delete it with
-  // `npx apiblaze delete <name> --yes` if you want it gone).
-  const markDone = (k) => { state.done = state.done || {}; state.done[k] = true; saveState(state); };
-  const isDone = (k) => !!(state.done && state.done[k]);
-  const skipNote = () => console.log(green("  ✓ already completed on a previous run — skipping"));
-
-  // The resume decision comes FIRST — before any step runs, so a returning user
-  // never replays even the tool check just to reach it.
-  let resuming = false;
-  if (state.proxy && (state.base || (state.done && Object.keys(state.done).length))) {
-    console.log(dim(`  Found progress from an earlier run (proxy ${state.proxy}).`));
-    const a = (await ask(`${cyan("▸ resume it, or start fresh?")} ${dim("[r]esume / [f]resh")}: `)).trim().toLowerCase();
-    if (a.startsWith("f")) { state = {}; saveState(state); console.log(dim("  Starting fresh.\n")); }
-    else { resuming = true; console.log(dim("  Resuming — finished steps will be skipped.\n")); }
-  }
-
-  if (resuming && isDone("preflight")) {
-    // CLI already fetched on the prior run; skip the whole tool-check step.
-  } else {
-    await preflight();
-    markDone("preflight");
-  }
-
-  const PROXY = state.proxy || ("resiresi" + newSuffix());
-  state.proxy = PROXY; saveState(state);
-  console.log("  Your unique proxy name for this run: " + green(PROXY) + "\n");
-
-  await pause("Press Enter to begin");
-
-  // 1 · backend
-  step("Start ResiResi's local backend",
-    "The server that stores and serves the reservations. It runs on your machine\n" +
-    "in the background at http://localhost:8080 for the rest of the lab.");
-  await pause("Press Enter to run this step", "node resiresi-backend-lightweight/server.js");
-  startBg(process.execPath, [join(BACKEND_LW, "server.js")], { env: { ...process.env, PORT: "8080" } });
-  process.stdout.write(dim("  waiting for http://localhost:8080/healthz "));
-  await waitFor(async () => {
-    const r = await httpOk("http://localhost:8080/healthz"); process.stdout.write(dim("."));
-    return r && (await r.json()).db === "ok";
-  }, { what: "the backend" });
-  console.log(green("  ready ✓"));
-
-  // 2 · login
-  step("Log in to APIblaze",
-    "A later step gives your local backend a public URL through APIblaze. That needs\n" +
-    "an account, so this opens your browser to log in (free to sign up).");
-  if (isDone("login")) {
-    skipNote();
-    console.log(dim("  (if the session expired, run  npx apiblaze login  yourself and re-run)"));
-  } else {
-    await pause("Press Enter to run this step", "apiblaze login");
-    await abz(["login"]);
-    markDone("login");
-  }
-
-  // 3 · create proxy FROM the OpenAPI spec — one step gives the gateway the
-  // routes, the version, and the localhost targets (from the spec's `servers`).
-  // Tenant slug: "nino" + this run's unique suffix — tenant names are GLOBALLY
-  // unique across all of APIblaze, so a fixed "nino" would collide with anyone
-  // (including your own earlier runs).
-  const TENANT_REQ = "nino" + PROXY.slice("resiresi".length);
-  const createArgs = ["create", "--name", PROXY,
-    "--openapi", "resiresi-backend-lightweight/openapi.yaml",
-    "--tenant", TENANT_REQ,
-    "--auth", "api_key", "--identified", "--iam", "--json"];
-  step("Create the APIblaze proxy from the resiresi OpenAPI spec",
-    `This creates the APIblaze proxy  ${bold(PROXY + ".abz.run")}  — the public\n` +
-    "address that will tunnel into your local backend. It's created FROM the\n" +
-    "resiresi OpenAPI spec, so the gateway knows the routes from day one (the\n" +
-    "AI agents use them later). Two options switch on this lab's features:\n" +
-    "  • --identified — each request can say which PERSON it's for, so later a\n" +
-    "    rule can give every diner only their own reservations.\n" +
-    "  • --iam — turns on users & groups, so you can put staff (like Maria) in a\n" +
-    "    group a rule can treat differently.\n" +
-    `("${PROXY}" is unique to your run, so no two testers ever clash.)`);
-  const parseCreate = (out) => {
-    const created = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1));
-    const projectId = created.project_id || PROXY;
+// ── the io adapter ───────────────────────────────────────────────────────────
+let N = 0;
+const io = {
+  s,
+  print: (text) => console.log(text),
+  step(title, explain) {
+    N++;
+    console.log("\n" + s.bold(`━━ Step ${N} · ${title} ` + "━".repeat(Math.max(0, 46 - title.length))));
+    if (explain) console.log(explain.split("\n").map((l) => s.dim(l)).join("\n"));
+  },
+  // Show the exact command a step is about to run, THEN wait for Enter — so
+  // nothing runs before the user has seen what it is.
+  pause(msg = "Press Enter to run this step", cmd) {
+    if (cmd) console.log("\n" + s.dim("  about to run:") + "\n    " + s.green(cmd));
+    return rlAsk(`\n${s.cyan("▸ " + msg)} `);
+  },
+  async ask(prompt, def) {
+    const suffix = def ? ` ${s.dim("[" + def + "]")}` : "";
+    const a = (await rlAsk(`\n${s.cyan("▸ " + prompt)}${suffix}: `)).trim();
+    return a || def || "";
+  },
+  async choice(prompt, options, defKey) {
+    const a = (await rlAsk(`\n${s.cyan("▸ " + prompt)} ${s.dim("[" + defKey + "]")}: `)).trim().toLowerCase();
+    return a || defKey;
+  },
+  run, capture,
+  startBg(cmd, args, opts = {}) {
+    const p = spawn(cmd, args, { stdio: "ignore", shell: isWin, detached: false, ...opts });
+    bg.push(p);
+    return p;
+  },
+  progress(label) {
+    process.stdout.write(s.dim(label));
     return {
-      // The whole lab drives the DEV environment: that's where the gateway
-      // captures traffic samples, so every call you see also feeds the AI agents.
-      base: `https://${projectId}.abz.run/1.0.0/dev`,
-      dpkey: (created.api_keys && created.api_keys.dev) || created.api_key,
-      tenant: created.tenant || TENANT_REQ,
+      tick: () => process.stdout.write(s.dim(".")),
+      end: (text) => console.log(text ?? ""),
     };
-  };
-
-  let BASE, DPKEY, TENANT;
-  if (state.base && state.dpkey) {
-    // An earlier run already created this proxy (and saved its key) — reuse it
-    // instead of trying to create a duplicate (which the server rejects).
-    console.log(dim("\n  You already created this proxy on an earlier run — reusing it,\n" +
-      "  no need to create it again."));
-    await pause("Press Enter to continue");
-    BASE = state.base; DPKEY = state.dpkey; TENANT = state.tenant || TENANT_REQ;
-    console.log(green("  Reusing " + BASE + " ✓"));
-  } else {
-    await pause("Press Enter to run this step", abzDisplay(createArgs));
-    let cj;
-    try {
-      cj = await abzCapture(createArgs, { cwd: ROOT });
-    } catch (e) {
-      // The name exists on the server but this run has no key for it (a half-
-      // finished earlier attempt). Remove that empty shell and create it fresh so
-      // the lab ends up with a working key — no manual cleanup needed.
-      console.log(yellow(`\n  "${PROXY}" already exists but this run has no key for it.`));
-      console.log(dim("  Removing the old one and recreating it so the lab has a working key…"));
-      await abz(["delete", PROXY, "--yes"]).catch(() => {});
-      cj = await abzCapture(createArgs, { cwd: ROOT });
+  },
+  // Render a reservations list as a compact, readable table instead of a bare
+  // count — so the user can actually SEE whose reservations came back (the
+  // whole point of the before/after). `highlight` colors one diner's rows.
+  reservations(rows, highlight) {
+    if (!rows || !rows.length) { console.log(s.dim("    (none)")); return; }
+    for (const r of rows) {
+      const line = "    " + r.when.padEnd(22) + "  " + r.status.padEnd(9) +
+        "  party " + r.party.padEnd(2) + "  " + r.who + (r.email ? "  <" + r.email + ">" : "");
+      console.log(highlight && r.email === highlight ? s.green(line) : s.dim(line));
     }
-    const parsed = parseCreate(cj);
-    BASE = parsed.base; DPKEY = parsed.dpkey; TENANT = parsed.tenant;
-    state.base = BASE; state.dpkey = DPKEY; state.tenant = TENANT; saveState(state);
-    console.log("  Proxy (dev): " + green(BASE) + dim("  tenant: ") + green(TENANT));
-  }
+  },
+  pane() { /* terminal: no panes */ },
+  stateChip() { /* terminal: no header chips */ },
+};
 
-  // 4 · tunnel
-  const tunnelArgs = ["dev", "8080", "--project", PROXY];
-  step("Connect your API to the gateway",
-    "Your backend lives on your laptop; the gateway lives in the cloud. This opens a\n" +
-    "secure link between them so real calls to the public URL reach your machine.\n" +
-    "It keeps running in the background for the rest of the lab.");
-  await pause("Press Enter to run this step", abzDisplay(tunnelArgs));
-  // Capture the tunnel's output to a log so a failure is diagnosable instead of a
-  // silent timeout (it runs headless, so its own errors would otherwise vanish).
-  const tunnelLog = join(ROOT, "lab", ".tunnel.log");
-  // Reachability probe: /v1/restaurants is unprotected, so any JSON answer
-  // means gateway→tunnel→backend is alive; 502/503 tunnel errors mean it isn't.
-  const tunnelAlive = async () => {
-    try {
-      const r = await fetch(`${BASE}/v1/restaurants`, { headers: { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" } });
-      return r.ok;
-    } catch { return false; }
-  };
-  const startTunnel = async () => {
-    const tlog = openSync(tunnelLog, "w");
-    startBg(NPX, [...ABZ, ...tunnelArgs], { stdio: ["ignore", tlog, tlog] });
-    process.stdout.write(dim("  connecting the tunnel "));
-    try {
-      await waitFor(async () => { process.stdout.write(dim(".")); return await tunnelAlive(); }, { tries: 60, what: "the tunnel" });
-    } catch (e) {
-      let tail = "";
-      try { tail = readFileSync(tunnelLog, "utf8").split("\n").slice(-12).join("\n"); } catch {}
-      if (tail.trim()) console.log("\n" + dim("  tunnel output:\n") + tail.replace(/^/gm, "    "));
-      throw e;
-    }
-    console.log(green("  tunnel up ✓"));
-  };
-  // Self-heal: the tunnel is a background child — if it dies mid-lab (laptop
-  // sleep, crash), later steps would hit "Dev tunnel offline". Probe + restart.
-  const ensureTunnel = async () => {
-    if (await tunnelAlive()) return;
-    console.log(yellow("  The tunnel dropped — reconnecting…"));
-    await startTunnel();
-  };
-  await startTunnel();
-
-  // 5 · smoke test
-  const smokeCurl =
-    `curl "${BASE}/v1/restaurants/nino/reservations" \\\n` +
-    `  -H "X-API-Key: ${DPKEY}" \\\n` +
-    `  -H "X-End-User-Id: john@nino.com"`;
-  step("Prove the proxy reaches your machine",
-    "This is the exact call a storefront makes: the API key says WHICH APP;\n" +
-    "X-End-User-Id says WHICH PERSON. It hits the public proxy URL, which the\n" +
-    "tunnel forwards to the backend on your machine. Copy-paste it yourself too —\n" +
-    "it's a real, runnable request.");
-  await pause("Press Enter to run this step", smokeCurl);
-  {
-    const r = await httpOk(`${BASE}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
-    const d = await r.json();
-    console.log(green(`  ✓ ${d.data.length} reservations returned:`));
-    printReservations(d.data);
-  }
-
-  // One keyless call too — a DENIED sample. The gateway captures all of this
-  // dev-environment traffic, so the authorization agent later reasons from
-  // real allowed AND denied requests.
-  await fetch(`${BASE}/v1/restaurants/nino/reservations`).catch(() => {});
-  console.log(dim("  (these dev calls double as the sample traffic the AI agents learn from)"));
-
-  // 6 · widget key
-  step("Mint the key that powers ResiResi's Developers page",
-    "The API side is done and proven. Next up: ResiResi's WEBSITE — its\n" +
-    "Developers section, where restaurant tenants like Nino's and Gino's do\n" +
-    "admin things themselves: get API keys for their apps, and organize their\n" +
-    "users into groups.\n\n" +
-    "For the website's backend to perform those admin actions, it needs its own\n" +
-    "key — a limited one that can ONLY do those admin actions (issue keys, manage\n" +
-    "users & groups), not a full-control key. This mints it. It stays on the\n" +
-    "server, never in the browser, and is shown once.");
-  const mintArgs = ["apikeys", "mint", "--desc", "resiresi widget key", "--json"];
-  let CPKEY;
-  if (state.cpkey) {
-    console.log(dim("\n  You already minted this key on an earlier run — reusing it."));
-    await pause("Press Enter to continue");
-    CPKEY = state.cpkey;
-  } else {
-    await pause("Press Enter to run this step", abzDisplay(mintArgs));
-    const mj = await abzCapture(mintArgs);
-    CPKEY = JSON.parse(mj.slice(mj.indexOf("{"), mj.lastIndexOf("}") + 1)).key;
-    state.cpkey = CPKEY; saveState(state);
-  }
-
-  // 7 · frontend deps + env
-  step("Install ResiResi's web app + drop in the key",
-    "ResiResi's website (a normal Next.js app in this repo) has a Developers\n" +
-    "section where Nino's and Gino's software engineers SELF-SERVE: they get the\n" +
-    "API keys their own restaurant websites use to make reservations, and manage\n" +
-    "their users & groups. We install the app, plus the apiblaze package for its\n" +
-    "widgets, and give it the widget key (stays on the server, never in the browser).");
-  if (isDone("install")) {
-    skipNote();
-    writeFileSync(join(FE, ".env.local"), `APIBLAZE_CP_KEY=${CPKEY}\n`);
-  } else {
-    await pause("Press Enter to run this step", "cd resiresi-frontend && npm install && npm install apiblaze");
-    await run(NPM, ["install"], { cwd: FE });
-    await run(NPM, ["install", "apiblaze"], { cwd: FE });
-    writeFileSync(join(FE, ".env.local"), `APIBLAZE_CP_KEY=${CPKEY}\n`);
-    console.log(green("  wrote resiresi-frontend/.env.local ✓"));
-    markDone("install");
-  }
-
-  // 8 · wire widgets
-  step("Add the two widgets to ResiResi's Developers page",
-    "This edits only files inside rr/resiresi-frontend/ — nothing elsewhere on\n" +
-    "your computer. It creates:\n" +
-    "  • rr/resiresi-frontend/lib/apiblaze-user.ts\n" +
-    "  • rr/resiresi-frontend/app/api/apiblaze/keys/route.ts\n" +
-    "  • rr/resiresi-frontend/app/api/apiblaze/groups/route.ts\n" +
-    "(the two routes keep the widget key on the server), then mounts the API-key\n" +
-    "and Users & Groups widgets in rr/resiresi-frontend/app/developers/page.tsx.");
-  if (isDone("wire2")) {
-    skipNote();
-  } else {
-    await pause("Press Enter to run this step");
-    wireWidgets(FE, PROXY.slice("resiresi".length));
-    console.log(green("  3 files created + widgets mounted ✓"));
-    markDone("wire2");
-  }
-
-  // 9 · dev server
-  step("Start ResiResi's web app",
-    "Runs ResiResi's website on http://localhost:3003 in the background.");
-  await pause("Press Enter to run this step", "cd resiresi-frontend && npm run dev");
-  startBg(NPM, ["run", "dev"], { cwd: FE, env: { ...process.env, APIBLAZE_CP_KEY: CPKEY } });
-  process.stdout.write(dim("  starting http://localhost:3003 "));
-  await waitFor(async () => { process.stdout.write(dim(".")); return await httpOk("http://localhost:3003/login"); },
-    { what: "the app" });
-  console.log(green("  up ✓"));
-
-  // 10 · crown the admin, then sign in as them (one step — the admin is named
-  // BEFORE the first sign-in, so the widget is ready the moment they land).
-  step("Make yourself the admin and sign in",
-    "ResiResi's app needs a first admin — the person who manages users & groups.\n" +
-    "You hold the manager key, so you name that admin here, then sign in as them.\n" +
-    "Pick the email (the default is fine; sign in with the SAME one).");
-  const defaultEmail = state.ownerEmail || "owner@nino.com";
-  const answer = (await ask(`\n${cyan("▸ Admin and Email you'll sign in as")} ${dim("[" + defaultEmail + "]")}: `)).trim();
-  const OWNER = answer || defaultEmail;
-  state.ownerEmail = OWNER; saveState(state);
-  const adminArgs = ["admins", "add", OWNER, "--tenant", TENANT];
-  if (isDone("admin:" + OWNER)) {
-    skipNote();
-  } else {
-    await pause("Press Enter to run this step", abzDisplay(adminArgs));
-    await abz(adminArgs);
-    markDone("admin:" + OWNER);
-  }
-  console.log(dim(`\n  Done — now open  http://localhost:3003/developers  and sign in with any\n` +
-    `  name and the email  ${OWNER} . Both widgets appear, ready to use.`));
-  await pause("Signed in? Press Enter");
-
-  // 12 · BEFORE — John opens MARIA'S reservation by id. The lab first finds
-  // one of Maria's seeded reservations (as Maria, so this fetch works before
-  // AND after the rules land).
-  const listUrl = `${BASE}/v1/restaurants/nino/reservations`;
-  if (!state.mariaResi) {
-    const lr = await fetch(listUrl, { headers: { "X-API-Key": DPKEY, "X-End-User-Id": "maria@nino.com" } });
-    const ld = await lr.json().catch(() => null);
-    const mrow = ld && Array.isArray(ld.data) ? ld.data.find((x) => x.diner_external_id === "maria@nino.com") : null;
-    if (mrow) { state.mariaResi = mrow.id; saveState(state); }
-  }
-  const MARIA_RESI = state.mariaResi;
-  const curlOne = (who, id) =>
-    `curl "${BASE}/v1/restaurants/nino/reservations/${id}" \\\n` +
-    `  -H "X-API-Key: ${DPKEY}" \\\n` +
-    `  -H "X-End-User-Id: ${who}"`;
-  await ensureTunnel();
-  step("BEFORE — John can open MARIA'S reservation",
-    "Maria has a reservation at Nino's. John is a different diner — but with the\n" +
-    "app's key, nothing stops him from opening HER booking by its id:");
-  await pause("Press Enter to run this step", curlOne("john@nino.com", MARIA_RESI ?? "<maria's id>"));
-  if (MARIA_RESI) {
-    const r = await fetch(`${listUrl}/${MARIA_RESI}`, { headers: { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" } });
-    const d = await r.json().catch(() => null);
-    if (r.ok && d) {
-      console.log(yellow(`  HTTP 200 — John just read Maria's reservation. Not right:`));
-      printReservations([d], "maria@nino.com");
-    } else {
-      console.log(dim(`  HTTP ${r.status} (already blocked? you may be resuming after the rule).`));
-    }
-  } else {
-    console.log(yellow("  Couldn't locate Maria's seeded reservation — continuing anyway."));
-  }
-
-  // 13 · make the group — user's choice: click it in the widget, or let the
-  // lab run the equivalent CLI commands (same result either way).
-  step("Put staff in a group",
-    "Goal: a group called  " + bold("reservationists") + "  with  " + bold("maria@nino.com") + "  in it\n" +
-    "(she's staff; John stays just a diner). Two ways to do it — pick one:\n\n" +
-    "  " + bold("[w]idget") + "  — in Users & Groups: + New user → maria@nino.com,\n" +
-    "              + New group → reservationists, then add maria as a member.\n" +
-    "  " + bold("[t]erminal") + " — the lab runs these for you:\n" +
-    green(`      npx apiblaze group create reservationists --admin ${OWNER} --tenant ${TENANT}\n` +
-    `      npx apiblaze group add-user maria@nino.com reservationists --tenant ${TENANT}`));
-  if (isDone("group")) {
-    skipNote();
-  } else {
-    const how = (await ask(`\n${cyan("▸ type w for widget, or press Enter for terminal")} ${dim("[t]")}: `)).trim().toLowerCase();
-    if (how.startsWith("w")) {
-      await pause("Done in the widget? Press Enter");
-    } else {
-      await abz(["group", "create", "reservationists", "--admin", OWNER, "--tenant", TENANT]);
-      await abz(["group", "add-user", "maria@nino.com", "reservationists", "--tenant", TENANT]);
-      console.log(green("  reservationists ✓ (maria@nino.com is a member)"));
-      console.log(dim("  Refresh the Users & Groups widget to see it there too."));
-    }
-    markDone("group");
-  }
-
-  // 14 · one-shot rule (plain English → enforced authorization)
-  const RULE = 'Bookings belong to whoever makes them. A reservation may be opened by its owner or by members of the existing group "reservationists". The full reservations list is for "reservationists" only. Leave every other route open.';
-  const ruleArgs = ["rule", RULE, PROXY, "--enforce"];
-  step("Write the access rules — one command, plain English",
-    "One sentence becomes enforced authorization: the AI designs the model and\n" +
-    "rules from your routes and traffic, saves them, and turns enforcement on —\n" +
-    "bookings remember WHO made them, a reservation opens only for its owner (or\n" +
-    "staff), and the full list is staff-only.");
-  if (isDone("authz")) {
-    console.log(green("  ✓ the rules were already enabled on a previous run"));
-    const again = (await ask(`${cyan("▸ press Enter to skip, or type r to re-run the rule")}: `)).trim().toLowerCase();
-    if (again.startsWith("r")) await abz(ruleArgs);
-  } else {
-    await pause("Press Enter to run this step", `npx apiblaze rule "${RULE.replace(/"/g, '\\"')}" ${PROXY} --enforce`);
-    await abz(ruleArgs);
-    markDone("authz");
-    console.log(dim("  (want to refine it later? chat interactively: npx apiblaze agent authz " + PROXY + ")"));
-  }
-
-  // 15 · AFTER — the full story in four calls.
-  await ensureTunnel();
-  step("AFTER — John books his own; Maria's is off-limits",
-    "Same app key everywhere — the PERSON now decides the result:\n" +
-    "  1. John books a table (the proxy records him as the owner).\n" +
-    "  2. John opens HIS new reservation — works.\n" +
-    "  3. John tries MARIA'S reservation — refused.\n" +
-    "  4. Maria (staff) opens John's — works.");
-  await pause("Press Enter to run this step",
-    curlOne("john@nino.com", MARIA_RESI ?? "<maria's id>"));
-  {
-    const H = (who) => ({ "X-API-Key": DPKEY, "X-End-User-Id": who, "Content-Type": "application/json" });
-    const outcome = (n, label, ok, detail) =>
-      console.log((ok ? green : yellow)(`  ${n}. ${label} — ${detail}${ok ? " ✓" : ""}`));
-    // Every beat shows its exact curl — copy-paste-able, nothing hidden.
-    const curlGet = (who, id) =>
-      `curl "${BASE}/v1/restaurants/nino/reservations/${id}" -H "X-API-Key: ${DPKEY}" -H "X-End-User-Id: ${who}"`;
-    const showCurl = (c2) => console.log(dim("     $ " + c2));
-
-    // 1 · John books
-    showCurl(`curl -X POST "${BASE}/v1/restaurants/nino/reservations" -H "X-API-Key: ${DPKEY}" -H "X-End-User-Id: john@nino.com" -H "Content-Type: application/json" -d '{"diner_name":"John Diner","diner_external_id":"john@nino.com","party_size":2,"starts_at":"…"}'`);
-    const br = await fetch(listUrl, { method: "POST", headers: H("john@nino.com"),
-      body: JSON.stringify({ diner_name: "John Diner", diner_external_id: "john@nino.com",
-        party_size: 2, starts_at: new Date(Date.now() + 86400000).toISOString() }) });
-    const bd = await br.json().catch(() => null);
-    const JOHN_RESI = bd?.id ?? null;
-    outcome(1, "John books a table", br.status === 201, `HTTP ${br.status}${JOHN_RESI ? " · owner recorded by the proxy" : ""}`);
-
-    // 2 · John reads his own
-    if (JOHN_RESI) {
-      showCurl(curlGet("john@nino.com", JOHN_RESI));
-      const r2 = await fetch(`${listUrl}/${JOHN_RESI}`, { headers: H("john@nino.com") });
-      outcome(2, "John opens HIS reservation", r2.ok, `HTTP ${r2.status}`);
-    } else {
-      console.log(yellow("  2. (skipped — booking failed above)"));
-    }
-
-    // 3 · John tries Maria's
-    if (MARIA_RESI) {
-      showCurl(curlGet("john@nino.com", MARIA_RESI));
-      const r3 = await fetch(`${listUrl}/${MARIA_RESI}`, { headers: H("john@nino.com") });
-      outcome(3, "John tries MARIA'S reservation", !r3.ok, `HTTP ${r3.status}${!r3.ok ? " · blocked" : " — expected a denial! (is Enforce Authorization on?)"}`);
-    }
-
-    // 4 · Maria (staff) reads John's
-    if (JOHN_RESI) {
-      showCurl(curlGet("maria@nino.com", JOHN_RESI));
-      const r4 = await fetch(`${listUrl}/${JOHN_RESI}`, { headers: H("maria@nino.com") });
-      outcome(4, "Maria (staff) opens John's", r4.ok, `HTTP ${r4.status}${r4.ok ? " · reservationists see everything" : " — expected 200: is maria in the group?"}`);
-    }
-  }
-
-  console.log(bold(green("\n  ✓ Lab complete — one key, many people: owners see their own, staff see all.\n")));
-  console.log(dim("  Cleanup: this script stops the backend, app and tunnel when it exits.\n"));
-  rl.close();
-}
-
-main().catch((e) => {
-  console.error(red("\n  ✗ " + (e?.message || e)));
-  console.error(dim("  Fix the issue above and re-run  ./start.sh  (or  .\\start.ps1 ) — it resumes with the same proxy."));
-  rl.close();
-  process.exit(1);
-});
+runLab(io, { panes: false })
+  .then(() => rl.close())
+  .catch((e) => {
+    console.error(s.red("\n  ✗ " + (e?.message || e)));
+    console.error(s.dim("  Fix the issue above and re-run  ./start.sh  (or  .\\start.ps1 ) — it resumes with the same proxy."));
+    rl.close();
+    process.exit(1);
+  });

@@ -8,9 +8,12 @@ export const dynamic = "force-dynamic";
 export default function SignInPage({
   searchParams,
 }: {
-  searchParams: { callbackUrl?: string };
+  searchParams: { callbackUrl?: string; email?: string; name?: string };
 }) {
-  if (getUser()) redirect(searchParams.callbackUrl ?? "/reservations");
+  // ?email= pre-fills the form (demo deep-links, e.g. "sign in as
+  // john@nino.com"). When present it also wins over an existing session, so a
+  // link can SWITCH users — the human still clicks Sign in themselves.
+  if (getUser() && !searchParams.email) redirect(searchParams.callbackUrl ?? "/reservations");
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4">
@@ -28,6 +31,7 @@ export default function SignInPage({
             <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-stone-700">Your name</label>
             <input
               id="name" name="name" autoComplete="name" placeholder="Alex Rivera"
+              defaultValue={searchParams.name ?? ""}
               className="block w-full rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-stone-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
             />
           </div>
@@ -35,6 +39,7 @@ export default function SignInPage({
             <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-stone-700">Email</label>
             <input
               id="email" name="email" type="email" required autoComplete="email" placeholder="alex@example.com"
+              defaultValue={searchParams.email ?? ""}
               className="block w-full rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm shadow-sm placeholder:text-stone-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
             />
           </div>

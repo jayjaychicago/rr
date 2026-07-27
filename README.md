@@ -25,12 +25,12 @@ version, for reference.)
 Prefer a script that explains each step, pauses, runs it, and shows the result?
 
 ```bash
-./start.sh        # macOS / Linux
-.\start.ps1       # Windows (PowerShell)
+./launch.sh       # in your browser — steps + both apps live on one screen
+./start.sh        # same lab, in your terminal
 ```
 
-It drives the whole exercise end to end. See **[LAB.md](LAB.md)**. Or set it up
-by hand below.
+(Windows: `.\launch.ps1` / `.\start.ps1`.) It drives the whole exercise end to
+end. See **[LAB.md](LAB.md)**. Or set it up by hand below.
 
 ## Run it
 

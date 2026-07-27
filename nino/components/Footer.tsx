@@ -26,6 +26,13 @@ export function Footer() {
       </div>
       <div className="border-t border-stone-800 px-4 py-4 text-center text-xs">
         © {new Date().getFullYear()} Nino&apos;s Pizza. All rights reserved.
+        {process.env.RESIRESI_API_KEY && process.env.RESIRESI_API_URL && (
+          // Demo clarity: make it visible that this storefront's reservation
+          // traffic rides the APIblaze proxy (set via .env.local by the lab).
+          <span className="ml-3 inline-block rounded-full border border-stone-700 px-2.5 py-0.5 text-stone-500">
+            reservations via APIblaze · {new URL(process.env.RESIRESI_API_URL).host}
+          </span>
+        )}
       </div>
     </footer>
   );
