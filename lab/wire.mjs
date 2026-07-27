@@ -53,11 +53,11 @@ export function getApiblazeUser(): AppUser | null {
     page = `import { ApiKeyWidget, UsersGroupsWidget } from "apiblaze/react";\n` + page;
   }
   page = page.replace(
-    /<Placeholder>\s*The API-key widget goes here\.[^<]*<\/Placeholder>/,
+    /<Placeholder>\s*The API-key widget goes here[^<]*<\/Placeholder>/,
     `<ApiKeyWidget title="API keys" theme={{ accent: "#4f46e5" }} />`,
   );
   page = page.replace(
-    /<Placeholder>\s*The users &amp; groups widget goes here\.[^<]*<\/Placeholder>/,
+    /<Placeholder>\s*The users &amp; groups widget goes here[^<]*<\/Placeholder>/,
     `<UsersGroupsWidget theme={{ accent: "#4f46e5" }} />`,
   );
   writeFileSync(pagePath, page);

@@ -146,7 +146,7 @@ function commandOk(cmd, args) {
 // Pinned to an exact version (not @latest) so npx installs it ONCE and then runs
 // straight from cache on every later call — no per-command registry round-trip,
 // no repeated prompts, and the lab always runs the version it was written for.
-const ABZ = ["--yes", "apiblaze@0.19.13"];
+const ABZ = ["--yes", "apiblaze@0.19.14"];
 const abz = (args, opts) => run(NPX, [...ABZ, ...args], opts);
 const abzCapture = (args, opts) => capture(NPX, [...ABZ, ...args], opts);
 
@@ -519,7 +519,7 @@ async function main() {
   if (isDone("group")) {
     skipNote();
   } else {
-    const how = (await ask(`\n${cyan("▸ widget or terminal?")} ${dim("[t]")}: `)).trim().toLowerCase();
+    const how = (await ask(`\n${cyan("▸ type w for widget, or press Enter for terminal")} ${dim("[t]")}: `)).trim().toLowerCase();
     if (how.startsWith("w")) {
       await pause("Done in the widget? Press Enter");
     } else {
