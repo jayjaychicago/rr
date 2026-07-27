@@ -326,22 +326,36 @@ async function main() {
   // Capture the tunnel's output to a log so a failure is diagnosable instead of a
   // silent timeout (it runs headless, so its own errors would otherwise vanish).
   const tunnelLog = join(ROOT, "lab", ".tunnel.log");
-  const tlog = openSync(tunnelLog, "w");
-  startBg(NPX, [...ABZ, ...tunnelArgs], { stdio: ["ignore", tlog, tlog] });
-  process.stdout.write(dim("  connecting the tunnel "));
-  try {
-    await waitFor(async () => {
-      process.stdout.write(dim("."));
-      const r = await httpOk(`${BASE}/v1/restaurants`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
-      return r !== null;
-    }, { tries: 60, what: "the tunnel" });
-  } catch (e) {
-    let tail = "";
-    try { tail = readFileSync(tunnelLog, "utf8").split("\n").slice(-12).join("\n"); } catch {}
-    if (tail.trim()) console.log("\n" + dim("  tunnel output:\n") + tail.replace(/^/gm, "    "));
-    throw e;
-  }
-  console.log(green("  tunnel up ✓"));
+  // Reachability probe: /v1/restaurants is unprotected, so any JSON answer
+  // means gateway→tunnel→backend is alive; 502/503 tunnel errors mean it isn't.
+  const tunnelAlive = async () => {
+    try {
+      const r = await fetch(`${BASE}/v1/restaurants`, { headers: { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" } });
+      return r.ok;
+    } catch { return false; }
+  };
+  const startTunnel = async () => {
+    const tlog = openSync(tunnelLog, "w");
+    startBg(NPX, [...ABZ, ...tunnelArgs], { stdio: ["ignore", tlog, tlog] });
+    process.stdout.write(dim("  connecting the tunnel "));
+    try {
+      await waitFor(async () => { process.stdout.write(dim(".")); return await tunnelAlive(); }, { tries: 60, what: "the tunnel" });
+    } catch (e) {
+      let tail = "";
+      try { tail = readFileSync(tunnelLog, "utf8").split("\n").slice(-12).join("\n"); } catch {}
+      if (tail.trim()) console.log("\n" + dim("  tunnel output:\n") + tail.replace(/^/gm, "    "));
+      throw e;
+    }
+    console.log(green("  tunnel up ✓"));
+  };
+  // Self-heal: the tunnel is a background child — if it dies mid-lab (laptop
+  // sleep, crash), later steps would hit "Dev tunnel offline". Probe + restart.
+  const ensureTunnel = async () => {
+    if (await tunnelAlive()) return;
+    console.log(yellow("  The tunnel dropped — reconnecting…"));
+    await startTunnel();
+  };
+  await startTunnel();
 
   // 5 · smoke test
   const smokeCurl =
@@ -474,6 +488,7 @@ async function main() {
     `curl "${BASE}/v1/restaurants/nino/reservations/${id}" \\\n` +
     `  -H "X-API-Key: ${DPKEY}" \\\n` +
     `  -H "X-End-User-Id: ${who}"`;
+  await ensureTunnel();
   step("BEFORE — John can open MARIA'S reservation",
     "Maria has a reservation at Nino's. John is a different diner — but with the\n" +
     "app's key, nothing stops him from opening HER booking by its id:");
@@ -534,6 +549,7 @@ async function main() {
   }
 
   // 15 · AFTER — the full story in four calls.
+  await ensureTunnel();
   step("AFTER — John books his own; Maria's is off-limits",
     "Same app key everywhere — the PERSON now decides the result:\n" +
     "  1. John books a table (the proxy records him as the owner).\n" +
