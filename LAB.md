@@ -46,14 +46,13 @@ cd rr
 ./launch_terminal_only.sh        # terminal version
 ```
 
-**Windows (PowerShell):**
+**Windows:**
 
 ```
-.\launch.ps1      # browser version (three panes)
-.\launch_terminal_only.ps1       # terminal version
+.\launch.cmd      # browser version (three panes)
+.\launch_terminal_only.cmd       # terminal version
 ```
 
-(If Windows blocks it: `powershell -ExecutionPolicy Bypass -File .\launch.ps1`.)
 
 ## What it does
 
