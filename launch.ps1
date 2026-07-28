@@ -1,6 +1,6 @@
 # ResiResi × APIblaze — the guided lab, in your BROWSER (three panes:
 # steps on the left, ResiResi's Developers page and Nino's storefront live
-# on the right). Prefer the terminal version? That's .\start.ps1
+# on the right). Prefer the terminal version? That's .\launch_terminal_only.ps1
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 

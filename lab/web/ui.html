@@ -261,7 +261,7 @@ function showBanner(name, e) {
     b.onclick = () => { navigator.clipboard.writeText(e.copy); b.textContent = "copied ✓"; };
     slots.appendChild(b);
   }
-  for (const l of [e.url ? { label: "go →", url: e.url } : null, e.link, e.link2].filter(Boolean)) {
+  for (const l of [e.url ? { label: (e.goLabel || "go") + " →", url: e.url } : null, e.link, e.link2].filter(Boolean)) {
     const a = document.createElement("a");
     a.textContent = l.label; a.href = "#";
     a.onclick = (ev) => { ev.preventDefault(); navPane(name, l.url); };
@@ -359,8 +359,12 @@ const handlers = {
       mountPane(e.pane, e.url);
       if (e.note) showBanner(e.pane, { note: e.note });
     }
-    if (e.kind === "refresh") reloadPane(e.pane);
+    if (e.kind === "refresh") {
+      reloadPane(e.pane);
+      if (e.note) showBanner(e.pane, { note: e.note });
+    }
     if (e.kind === "banner") showBanner(e.pane, e);
+    if (e.kind === "clear") hideBanner(e.pane);
   },
   await() { /* the matching prompt's controls are already live */ },
   done() {

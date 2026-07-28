@@ -1,4 +1,3 @@
-import { ApiKeyWidget, UsersGroupsWidget } from "apiblaze/react";
 import { requireTenant } from "@/lib/tenant";
 import { requireUser } from "@/lib/user";
 
@@ -30,13 +29,17 @@ export default async function DevelopersPage() {
       {/* --- API access (placeholder until the widget is added) --- */}
       <section className="card p-6">
         <h2 className="text-base font-semibold">API access</h2>
-        <ApiKeyWidget title="API keys" theme={{ accent: "#4f46e5" }} />
+        <Placeholder>
+          The API-key widget goes here — the guided lab (or the docs) adds it.
+        </Placeholder>
       </section>
 
       {/* --- Users & Groups (placeholder until the widget is added) --- */}
       <section className="card p-6">
         <h2 className="text-base font-semibold">Users &amp; Groups</h2>
-        <UsersGroupsWidget theme={{ accent: "#4f46e5" }} />
+        <Placeholder>
+          The users &amp; groups widget goes here — the guided lab (or the docs) adds it.
+        </Placeholder>
       </section>
 
     </div>

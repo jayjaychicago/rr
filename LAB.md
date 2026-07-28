@@ -10,7 +10,7 @@ Two ways to run the same lab:
   the steps on the left, ResiResi's Developers page and Nino's Pizza storefront
   live on the right — so you *watch* the widgets appear and a diner get blocked
   in a real UI as each step lands.
-- **`./start.sh` — in your terminal.** Same steps, same commands, no browser
+- **`./launch_terminal_only.sh` — in your terminal.** Same steps, same commands, no browser
   chrome.
 
 ## The scenario
@@ -43,14 +43,14 @@ cd rr
 
 ```
 ./launch.sh       # browser version (three panes)
-./start.sh        # terminal version
+./launch_terminal_only.sh        # terminal version
 ```
 
 **Windows (PowerShell):**
 
 ```
 .\launch.ps1      # browser version (three panes)
-.\start.ps1       # terminal version
+.\launch_terminal_only.ps1       # terminal version
 ```
 
 (If Windows blocks it: `powershell -ExecutionPolicy Bypass -File .\launch.ps1`.)

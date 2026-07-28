@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ResiResi × APIblaze guided lab (macOS / Linux).
-# Explains, runs, and pauses at every step. Just: ./start.sh
+# Explains, runs, and pauses at every step. Just: ./launch_terminal_only.sh
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

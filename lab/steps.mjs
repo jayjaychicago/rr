@@ -2,7 +2,7 @@
  * The ResiResi × APIblaze lab — the step ENGINE, UI-agnostic.
  *
  * One sequence, two drivers:
- *   - lab/run.mjs        → terminal adapter (./start.sh) — readline + ANSI
+ *   - lab/run.mjs        → terminal adapter (./launch_terminal_only.sh) — readline + ANSI
  *   - lab/web/server.mjs → browser adapter (./launch.sh) — SSE + three panes
  *
  * The adapter passes an `io` object; every piece of user-facing copy lives HERE
@@ -25,7 +25,7 @@
  *   stateChip(key, value)                             // web header chips; terminal no-op
  *
  * opts: { panes?: boolean }  — panes=true adds the Nino-storefront moments
- * (browser lab); false keeps ./start.sh byte-identical to the pre-refactor lab.
+ * (browser lab); false keeps ./launch_terminal_only.sh byte-identical to the pre-refactor lab.
  */
 import { writeFileSync, readFileSync, openSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -45,7 +45,7 @@ export const NPM = isWin ? "npm.cmd" : "npm";
 // Pinned to an exact version (not @latest) so npx installs it ONCE and then runs
 // straight from cache on every later call — no per-command registry round-trip,
 // no repeated prompts, and the lab always runs the version it was written for.
-export const ABZ = ["--yes", "apiblaze@0.19.15"];
+export const ABZ = ["--yes", "apiblaze@0.19.16"];
 
 // Pre-publish escape hatch: APIBLAZE_LAB_CLI=/path/to/dist/index.js runs a
 // local CLI build instead of the npx-pinned release (used to verify the lab
@@ -102,6 +102,23 @@ export async function runLab(io, opts = {}) {
   const { s } = io;
   const { bold, green, yellow, dim, cyan } = s;
   const panes = !!opts.panes;
+
+  // Interaction phrasing is the ONE place the two drivers legitimately differ:
+  // the terminal says "Press Enter…", the browser has Run/Continue buttons.
+  // Defaults are the terminal wording (so ./launch_terminal_only.sh output is unchanged);
+  // the web adapter overrides via io.phrases. Step EXPLANATIONS stay shared.
+  const P = {
+    runStep: "Press Enter to run this step",
+    begin: "Press Enter to begin",
+    cont: "Press Enter to continue",
+    signedIn: "Signed in? Press Enter",
+    widgetDone: "Done in the widget? Press Enter",
+    groupHow: "type w for widget, or press Enter for terminal",
+    rerunRule: "press Enter to skip, or type r to re-run the rule",
+    widgetLabel: "[w]idget",
+    terminalLabel: "[t]erminal",
+    ...(io.phrases || {}),
+  };
 
   const abz = (args, o) => io.run(CLI.cmd, [...CLI.pre, ...args], o);
   const abzCapture = (args, o) => io.capture(CLI.cmd, [...CLI.pre, ...args], o);
@@ -170,13 +187,13 @@ export async function runLab(io, opts = {}) {
   io.print("  Your unique proxy name for this run: " + green(PROXY) + "\n");
   io.stateChip("proxy", PROXY);
 
-  await io.pause("Press Enter to begin");
+  await io.pause(P.begin);
 
   // 1 · backend
   io.step("Start ResiResi's local backend",
     "The server that stores and serves the reservations. It runs on your machine\n" +
     "in the background at http://localhost:8080 for the rest of the lab.");
-  await io.pause("Press Enter to run this step", "node resiresi-backend-lightweight/server.js");
+  await io.pause(P.runStep, "node resiresi-backend-lightweight/server.js");
   io.startBg(process.execPath, [join(BACKEND_LW, "server.js")], { env: { ...process.env, PORT: "8080" } });
   {
     const p = io.progress("  waiting for http://localhost:8080/healthz ");
@@ -195,7 +212,7 @@ export async function runLab(io, opts = {}) {
     skipNote();
     io.print(dim("  (if the session expired, run  npx apiblaze login  yourself and re-run)"));
   } else {
-    await io.pause("Press Enter to run this step", "apiblaze login");
+    await io.pause(P.runStep, "apiblaze login");
     await abz(["login", ...(panes ? ["--team", "default"] : [])]);
     markDone("login");
   }
@@ -238,11 +255,11 @@ export async function runLab(io, opts = {}) {
     // instead of trying to create a duplicate (which the server rejects).
     io.print(dim("\n  You already created this proxy on an earlier run — reusing it,\n" +
       "  no need to create it again."));
-    await io.pause("Press Enter to continue");
+    await io.pause(P.cont);
     BASE = state.base; DPKEY = state.dpkey; TENANT = state.tenant || TENANT_REQ;
     io.print(green("  Reusing " + BASE + " ✓"));
   } else {
-    await io.pause("Press Enter to run this step", abzDisplay(createArgs));
+    await io.pause(P.runStep, abzDisplay(createArgs));
     let cj;
     try {
       cj = await abzCapture(createArgs, { cwd: ROOT });
@@ -269,7 +286,7 @@ export async function runLab(io, opts = {}) {
     "Your backend lives on your laptop; the gateway lives in the cloud. This opens a\n" +
     "secure link between them so real calls to the public URL reach your machine.\n" +
     "It keeps running in the background for the rest of the lab.");
-  await io.pause("Press Enter to run this step", abzDisplay(tunnelArgs));
+  await io.pause(P.runStep, abzDisplay(tunnelArgs));
   // Capture the tunnel's output to a log so a failure is diagnosable instead of a
   // silent timeout (it runs headless, so its own errors would otherwise vanish).
   const tunnelLog = join(ROOT, "lab", ".tunnel.log");
@@ -314,7 +331,7 @@ export async function runLab(io, opts = {}) {
     "X-End-User-Id says WHICH PERSON. It hits the public proxy URL, which the\n" +
     "tunnel forwards to the backend on your machine. Copy-paste it yourself too —\n" +
     "it's a real, runnable request.");
-  await io.pause("Press Enter to run this step", smokeCurl);
+  await io.pause(P.runStep, smokeCurl);
   {
     const r = await httpOk(`${BASE}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
     const d = await r.json();
@@ -342,10 +359,10 @@ export async function runLab(io, opts = {}) {
   let CPKEY;
   if (state.cpkey) {
     io.print(dim("\n  You already minted this key on an earlier run — reusing it."));
-    await io.pause("Press Enter to continue");
+    await io.pause(P.cont);
     CPKEY = state.cpkey;
   } else {
-    await io.pause("Press Enter to run this step", abzDisplay(mintArgs));
+    await io.pause(P.runStep, abzDisplay(mintArgs));
     const mj = await abzCapture(mintArgs);
     CPKEY = JSON.parse(mj.slice(mj.indexOf("{"), mj.lastIndexOf("}") + 1)).key;
     state.cpkey = CPKEY; saveState(state);
@@ -362,7 +379,7 @@ export async function runLab(io, opts = {}) {
     skipNote();
     writeFileSync(join(FE, ".env.local"), `APIBLAZE_CP_KEY=${CPKEY}\n`);
   } else {
-    await io.pause("Press Enter to run this step", "cd resiresi-frontend && npm install && npm install apiblaze");
+    await io.pause(P.runStep, "cd resiresi-frontend && npm install && npm install apiblaze");
     await io.run(NPM, ["install"], { cwd: FE });
     await io.run(NPM, ["install", "apiblaze"], { cwd: FE });
     writeFileSync(join(FE, ".env.local"), `APIBLAZE_CP_KEY=${CPKEY}\n`);
@@ -370,28 +387,14 @@ export async function runLab(io, opts = {}) {
     markDone("install");
   }
 
-  // 8 · wire widgets
-  io.step("Add the two widgets to ResiResi's Developers page",
-    "This edits only files inside rr/resiresi-frontend/ — nothing elsewhere on\n" +
-    "your computer. It creates:\n" +
-    "  • rr/resiresi-frontend/lib/apiblaze-user.ts\n" +
-    "  • rr/resiresi-frontend/app/api/apiblaze/keys/route.ts\n" +
-    "  • rr/resiresi-frontend/app/api/apiblaze/groups/route.ts\n" +
-    "(the two routes keep the widget key on the server), then mounts the API-key\n" +
-    "and Users & Groups widgets in rr/resiresi-frontend/app/developers/page.tsx.");
-  if (isDone("wire2")) {
-    skipNote();
-  } else {
-    await io.pause("Press Enter to run this step");
-    wireWidgets(FE, PROXY.slice("resiresi".length));
-    io.print(green("  3 files created + widgets mounted ✓"));
-    markDone("wire2");
-  }
-
-  // 9 · dev server
+  // 8 · dev server FIRST — so the Developers page is visible with its two
+  // EMPTY widget spots before the next step fills them (the reveal is the
+  // point: you watch the widgets appear in a running app, no restart).
   io.step("Start ResiResi's web app",
-    "Runs ResiResi's website on http://localhost:3003 in the background.");
-  await io.pause("Press Enter to run this step", "cd resiresi-frontend && npm run dev");
+    "Runs ResiResi's website on http://localhost:3003 in the background. Its\n" +
+    "Developers page is live but the two widget spots are still empty\n" +
+    "placeholders — the next step drops the real widgets in, live.");
+  await io.pause(P.runStep, "cd resiresi-frontend && npm run dev");
   io.startBg(NPM, ["run", "dev"], { cwd: FE, env: { ...process.env, APIBLAZE_CP_KEY: CPKEY } });
   {
     const p = io.progress("  starting http://localhost:3003 ");
@@ -399,7 +402,30 @@ export async function runLab(io, opts = {}) {
       { what: "the app" });
     p.end(green("  up ✓"));
   }
-  io.pane({ type: "mount", pane: "resiresi", url: "http://localhost:3003/developers", note: "ResiResi's Developers page — the two widgets are live here." });
+  io.pane({ type: "mount", pane: "resiresi", url: "http://localhost:3003/developers",
+    note: isDone("wire2")
+      ? "ResiResi's Developers page — the two widgets are live here."
+      : "ResiResi's Developers page — note the two empty spots where the widgets will go." });
+
+  // 9 · wire widgets (hot-reloads into the running app)
+  io.step("Add the two widgets to ResiResi's Developers page",
+    "This edits only files inside rr/resiresi-frontend/ — nothing elsewhere on\n" +
+    "your computer. It creates:\n" +
+    "  • rr/resiresi-frontend/lib/apiblaze-user.ts\n" +
+    "  • rr/resiresi-frontend/app/api/apiblaze/keys/route.ts\n" +
+    "  • rr/resiresi-frontend/app/api/apiblaze/groups/route.ts\n" +
+    "(the two routes keep the widget key on the server), then mounts the API-key\n" +
+    "and Users & Groups widgets in rr/resiresi-frontend/app/developers/page.tsx —\n" +
+    "the running app picks them up instantly.");
+  if (isDone("wire2")) {
+    skipNote();
+  } else {
+    await io.pause(P.runStep);
+    wireWidgets(FE, PROXY.slice("resiresi".length));
+    io.print(green("  3 files created + widgets mounted ✓"));
+    markDone("wire2");
+    io.pane({ type: "refresh", pane: "resiresi", note: "The two widgets just appeared where the placeholders were." });
+  }
 
   // 10 · crown the admin, then sign in as them (one step — the admin is named
   // BEFORE the first sign-in, so the widget is ready the moment they land).
@@ -415,14 +441,16 @@ export async function runLab(io, opts = {}) {
   if (isDone("admin:" + OWNER)) {
     skipNote();
   } else {
-    await io.pause("Press Enter to run this step", abzDisplay(adminArgs));
+    await io.pause(P.runStep, abzDisplay(adminArgs));
     await abz(adminArgs);
     markDone("admin:" + OWNER);
   }
   io.print(dim(`\n  Done — now open  http://localhost:3003/developers  and sign in with any\n` +
     `  name and the email  ${OWNER} . Both widgets appear, ready to use.`));
   io.pane({ type: "banner", pane: "resiresi", note: `Sign in here with any name and the email ${OWNER} — both widgets appear, ready to use.`, copy: OWNER, url: "http://localhost:3003/developers" });
-  await io.pause("Signed in? Press Enter");
+  await io.pause(P.signedIn);
+  // They confirmed they're signed in — the instruction has served its purpose.
+  io.pane({ type: "clear", pane: "resiresi" });
 
   // 12 · BEFORE — John opens MARIA'S reservation by id. The lab first finds
   // one of Maria's seeded reservations (as Maria, so this fetch works before
@@ -447,7 +475,7 @@ export async function runLab(io, opts = {}) {
       "Nino's website is a separate app in this repo (rr/nino). It calls the\n" +
       "reservation API exactly like a customer-facing site would: through YOUR\n" +
       "proxy, with the app's key and the signed-in diner as X-End-User-Id.");
-    await io.pause("Press Enter to run this step", "cd nino && npm install && npm run dev");
+    await io.pause(P.runStep, "cd nino && npm install && npm run dev");
     writeFileSync(join(NINO, ".env.local"),
       `RESIRESI_API_URL=${BASE}\nRESIRESI_API_KEY=${DPKEY}\nRESIRESI_RESTAURANT_ID=nino\n`);
     if (!isDone("nino-install")) {
@@ -468,11 +496,12 @@ export async function runLab(io, opts = {}) {
     "Maria has a reservation at Nino's. John is a different diner — but with the\n" +
     "app's key, nothing stops him from opening HER booking by its id:");
   if (panes && MARIA_RESI) {
-    io.pane({ type: "banner", pane: "nino", note: "Sign in as john@nino.com (any name), then open Maria's reservation →",
-      url: `http://localhost:3001/auth/signin?email=john@nino.com`,
+    io.pane({ type: "banner", pane: "nino", note: "Sign in as john@nino.com, then open Maria's reservation →",
+      url: `http://localhost:3001/auth/signin?email=john@nino.com&name=John`, goLabel: "sign in as John",
       link: { label: "Maria's reservation", url: `http://localhost:3001/reservations/${MARIA_RESI}` } });
   }
-  await io.pause("Press Enter to run this step", curlOne("john@nino.com", MARIA_RESI ?? "<maria's id>"));
+  await io.pause(P.runStep, curlOne("john@nino.com", MARIA_RESI ?? "<maria's id>"));
+  io.pane({ type: "clear", pane: "nino" });
   if (MARIA_RESI) {
     const r = await fetch(`${listUrl}/${MARIA_RESI}`, { headers: { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" } });
     const d = await r.json().catch(() => null);
@@ -491,27 +520,30 @@ export async function runLab(io, opts = {}) {
   io.step("Put staff in a group",
     "Goal: a group called  " + bold("reservationists") + "  with  " + bold("maria@nino.com") + "  in it\n" +
     "(she's staff; John stays just a diner). Two ways to do it — pick one:\n\n" +
-    "  " + bold("[w]idget") + "  — in Users & Groups: + New user → maria@nino.com,\n" +
+    "  " + bold(P.widgetLabel) + "  — in Users & Groups: + New user → maria@nino.com,\n" +
     "              + New group → reservationists, then add maria as a member.\n" +
-    "  " + bold("[t]erminal") + " — the lab runs these for you:\n" +
+    "  " + bold(P.terminalLabel) + " — the lab runs these for you:\n" +
     green(`      npx apiblaze group create reservationists --admin ${OWNER} --tenant ${TENANT}\n` +
     `      npx apiblaze group add-user maria@nino.com reservationists --tenant ${TENANT}`));
   if (isDone("group")) {
     skipNote();
   } else {
-    const how = await io.choice("type w for widget, or press Enter for terminal",
+    const how = await io.choice(P.groupHow,
       [{ key: "w", label: "Widget" }, { key: "t", label: "Terminal" }], "t");
     if (String(how).toLowerCase().startsWith("w")) {
       io.pane({ type: "banner", pane: "resiresi", note: "In Users & Groups: + New user → maria@nino.com · + New group → reservationists · add maria as a member.", copy: "maria@nino.com" });
-      await io.pause("Done in the widget? Press Enter");
+      await io.pause(P.widgetDone);
+      io.pane({ type: "clear", pane: "resiresi" });
     } else {
       await abz(["group", "create", "reservationists", "--admin", OWNER, "--tenant", TENANT]);
       await abz(["group", "add-user", "maria@nino.com", "reservationists", "--tenant", TENANT]);
       io.print(green("  reservationists ✓ (maria@nino.com is a member)"));
       io.print(dim("  Refresh the Users & Groups widget to see it there too."));
-      io.pane({ type: "refresh", pane: "resiresi", note: "reservationists is now visible in Users & Groups." });
     }
     markDone("group");
+    // Reload the Developers pane either way: the widget lands with the fresh
+    // reservationists group EXPANDED (defaultOpenGroup) — maria visibly inside.
+    io.pane({ type: "refresh", pane: "resiresi", note: "reservationists is open in Users & Groups — maria's in it." });
   }
 
   // 14 · one-shot rule (plain English → enforced authorization)
@@ -524,11 +556,11 @@ export async function runLab(io, opts = {}) {
     "staff), and the full list is staff-only.");
   if (isDone("authz")) {
     io.print(green("  ✓ the rules were already enabled on a previous run"));
-    const again = await io.choice("press Enter to skip, or type r to re-run the rule",
+    const again = await io.choice(P.rerunRule,
       [{ key: "s", label: "Skip" }, { key: "r", label: "Re-run" }], "s");
     if (String(again).toLowerCase().startsWith("r")) await abz(ruleArgs);
   } else {
-    await io.pause("Press Enter to run this step", `npx apiblaze rule "${RULE.replace(/"/g, '\\"')}" ${PROXY} --enforce`);
+    await io.pause(P.runStep, `npx apiblaze rule "${RULE.replace(/"/g, '\\"')}" ${PROXY} --enforce`);
     await abz(ruleArgs);
     markDone("authz");
     io.print(dim("  (want to refine it later? chat interactively: npx apiblaze agent authz " + PROXY + ")"));
@@ -542,7 +574,7 @@ export async function runLab(io, opts = {}) {
     "  2. John opens HIS new reservation — works.\n" +
     "  3. John tries MARIA'S reservation — refused.\n" +
     "  4. Maria (staff) opens John's — works.");
-  await io.pause("Press Enter to run this step",
+  await io.pause(P.runStep,
     curlOne("john@nino.com", MARIA_RESI ?? "<maria's id>"));
   {
     const H = (who) => ({ "X-API-Key": DPKEY, "X-End-User-Id": who, "Content-Type": "application/json" });
@@ -587,9 +619,10 @@ export async function runLab(io, opts = {}) {
 
     if (panes) {
       io.pane({ type: "banner", pane: "nino",
-        note: "See it in the UI: as john@nino.com, Maria's reservation now shows “not yours”; John's own still opens. Switch to maria@nino.com — everything opens.",
+        note: "See it in the UI: as john@nino.com, Maria's reservation now shows “not yours”; John's own still opens. Then switch to maria@nino.com — everything opens.",
         link: MARIA_RESI ? { label: "Maria's reservation (as John → blocked)", url: `http://localhost:3001/reservations/${MARIA_RESI}` } : undefined,
-        link2: JOHN_RESI ? { label: "John's booking (his own → opens)", url: `http://localhost:3001/reservations/${JOHN_RESI}` } : undefined });
+        link2: JOHN_RESI ? { label: "John's booking (his own → opens)", url: `http://localhost:3001/reservations/${JOHN_RESI}` } : undefined,
+        url: "http://localhost:3001/auth/signin?email=maria@nino.com&name=Maria", goLabel: "switch to Maria" });
     }
   }
 

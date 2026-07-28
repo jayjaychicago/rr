@@ -26,10 +26,10 @@ Prefer a script that explains each step, pauses, runs it, and shows the result?
 
 ```bash
 ./launch.sh       # in your browser — steps + both apps live on one screen
-./start.sh        # same lab, in your terminal
+./launch_terminal_only.sh        # same lab, in your terminal
 ```
 
-(Windows: `.\launch.ps1` / `.\start.ps1`.) It drives the whole exercise end to
+(Windows: `.\launch.ps1` / `.\launch_terminal_only.ps1`.) It drives the whole exercise end to
 end. See **[LAB.md](LAB.md)**. Or set it up by hand below.
 
 ## Run it

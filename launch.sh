@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ResiResi × APIblaze — the guided lab, in your BROWSER (three panes:
 # steps on the left, ResiResi's Developers page and Nino's storefront live
-# on the right). Prefer the terminal version? That's ./start.sh
+# on the right). Prefer the terminal version? That's ./launch_terminal_only.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 

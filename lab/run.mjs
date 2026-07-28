@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ResiResi × APIblaze — guided lab, TERMINAL driver (./start.sh / .\start.ps1).
+ * ResiResi × APIblaze — guided lab, TERMINAL driver (./launch_terminal_only.sh / .\launch_terminal_only.ps1).
  *
  * The step sequence + all copy live in ./steps.mjs (shared with the browser
  * driver, lab/web/server.mjs). This file only adapts it to a terminal: ANSI
@@ -119,7 +119,7 @@ runLab(io, { panes: false })
   .then(() => rl.close())
   .catch((e) => {
     console.error(s.red("\n  ✗ " + (e?.message || e)));
-    console.error(s.dim("  Fix the issue above and re-run  ./start.sh  (or  .\\start.ps1 ) — it resumes with the same proxy."));
+    console.error(s.dim("  Fix the issue above and re-run  ./launch_terminal_only.sh  (or  .\\launch_terminal_only.ps1 ) — it resumes with the same proxy."));
     rl.close();
     process.exit(1);
   });

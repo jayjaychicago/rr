@@ -2,7 +2,7 @@
 /**
  * ResiResi × APIblaze — guided lab, BROWSER driver (./launch.sh).
  *
- * Same step engine as ./start.sh (lab/steps.mjs) — this file only adapts it to
+ * Same step engine as ./launch_terminal_only.sh (lab/steps.mjs) — this file only adapts it to
  * a browser: a tiny HTTP server on :3333 that
  *   - serves lab/web/ui.html (the three-pane page),
  *   - streams every lab event over Server-Sent Events (GET /events),
@@ -86,12 +86,25 @@ function streamRun(cmd, args, opts = {}, { wantOutput = false } = {}) {
 let N = 0;
 const io = {
   s,
+  // Browser wording for the interaction prompts (steps.mjs merges these over
+  // its terminal defaults). Buttons do the acting, so no key-press language.
+  phrases: {
+    runStep: "Ready? Run this step",
+    begin: "Ready to begin?",
+    cont: "Continue when ready",
+    signedIn: "Signed in? Then continue",
+    widgetDone: "Done in the widget? Then continue",
+    groupHow: "Pick how to create the group",
+    rerunRule: "Skip, or re-run the rule?",
+    widgetLabel: "Widget",
+    terminalLabel: "Terminal",
+  },
   print: (text) => emit({ type: "log", text: text + "\n" }),
   step(title, explain) {
     N++;
     emit({ type: "step", n: N, title, explain: explain || "" });
   },
-  async pause(msg = "Press Enter to run this step", cmd) {
+  async pause(msg = "Ready? Run this step", cmd) {
     const evt = emit({ type: "prompt", kind: "pause", msg, cmd: cmd || null });
     await waitAction(evt);
   },

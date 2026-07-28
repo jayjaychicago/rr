@@ -58,7 +58,7 @@ export function getApiblazeUser(): AppUser | null {
   );
   page = page.replace(
     /<Placeholder>\s*The users &amp; groups widget goes here[^<]*<\/Placeholder>/,
-    `<UsersGroupsWidget theme={{ accent: "#4f46e5" }} />`,
+    `<UsersGroupsWidget theme={{ accent: "#4f46e5" }} defaultOpenGroup="reservationists" />`,
   );
   writeFileSync(pagePath, page);
 }
