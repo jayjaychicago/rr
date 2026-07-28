@@ -65,9 +65,10 @@ runs it:
    at your local API, with identity + IAM turned on.
 3. Opens the localhost tunnel and proves the proxy reaches your machine.
 4. Mints the control-plane widget key.
-5. Installs the platform app, writes its `.env.local`, and **wires the two
-   widgets** for you (the exact files the manual guide has you write).
-6. Starts the app, has you sign in, and crowns you the first tenant admin.
+5. Installs the platform app and starts it — its Developers page is live with
+   two **empty placeholder spots** — then **wires the two widgets** into the
+   running app, so you watch them appear where the placeholders were.
+6. Crowns you the first tenant admin and has you sign in.
 7. Walks the before/after: John (a diner) can open Maria's reservation → you put
    staff in a group and turn one plain-English sentence into enforced rules
    (`npx apiblaze rule "…" --enforce`) → John's own booking still opens, Maria's
@@ -80,6 +81,5 @@ you exactly what to do and waits.
 
 **Cleanup:** the lab stops the backend, app and tunnel when it exits.
 
-Prefer to do it by hand? The same steps, explained, live at
-<https://www.apiblaze.com/docs/full-test-project> and inside the app itself at
-`http://localhost:3003/developers`.
+More about the lab (what's on screen, the story, tips) lives at
+<https://www.apiblaze.com/docs/full-test-project>.
