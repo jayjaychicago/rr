@@ -9,7 +9,7 @@
  */
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { runLab, isWin } from "./steps.mjs";
+import { runLab, spawnTarget } from "./steps.mjs";
 
 // ── styling ──────────────────────────────────────────────────────────────────
 const c = (n, str) => `\x1b[${n}m${str}\x1b[0m`;
@@ -40,7 +40,8 @@ function run(cmd, args, opts = {}) {
   console.log(s.dim("$ " + shown));
   rl.pause();
   return new Promise((res, rej) => {
-    const p = spawn(cmd, args, { stdio: "inherit", shell: isWin, ...opts });
+    const t = spawnTarget(cmd, args);
+    const p = spawn(t.cmd, t.args, { stdio: "inherit", shell: t.shell, ...opts });
     const done = (fn) => (arg) => { rl.resume(); fn(arg); };
     p.on("error", done(rej));
     p.on("close", done((code) => (code === 0 ? res() : rej(new Error(`${shown} exited ${code}`)))));
@@ -53,7 +54,8 @@ function capture(cmd, args, opts = {}) {
   console.log(s.dim("$ " + shown));
   rl.pause();
   return new Promise((res, rej) => {
-    const p = spawn(cmd, args, { stdio: ["inherit", "pipe", "inherit"], shell: isWin, ...opts });
+    const t = spawnTarget(cmd, args);
+    const p = spawn(t.cmd, t.args, { stdio: ["inherit", "pipe", "inherit"], shell: t.shell, ...opts });
     let out = "";
     p.stdout.on("data", (d) => { out += d; process.stdout.write(d); });
     const done = (fn) => (arg) => { rl.resume(); fn(arg); };
@@ -89,7 +91,8 @@ const io = {
   },
   run, capture,
   startBg(cmd, args, opts = {}) {
-    const p = spawn(cmd, args, { stdio: "ignore", shell: isWin, detached: false, ...opts });
+    const t = spawnTarget(cmd, args);
+    const p = spawn(t.cmd, t.args, { stdio: "ignore", shell: t.shell, detached: false, ...opts });
     bg.push(p);
     return p;
   },

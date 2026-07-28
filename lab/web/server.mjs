@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { spawn, exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { runLab, isWin } from "../steps.mjs";
+import { runLab, isWin, spawnTarget } from "../steps.mjs";
 
 const PORT = 3333;
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -68,8 +68,9 @@ function streamRun(cmd, args, opts = {}, { wantOutput = false } = {}) {
   const shown = [cmd, ...args].join(" ");
   emit({ type: "log", text: s.dim("$ " + shown) + "\n" });
   return new Promise((res, rej) => {
-    const p = spawn(cmd, args, {
-      stdio: ["ignore", "pipe", "pipe"], shell: isWin,
+    const t = spawnTarget(cmd, args);
+    const p = spawn(t.cmd, t.args, {
+      stdio: ["ignore", "pipe", "pipe"], shell: t.shell,
       env: { ...process.env, FORCE_COLOR: "1", ...(opts.env || {}) },
       ...opts,
     });
@@ -121,7 +122,8 @@ const io = {
   run: (cmd, args, opts) => streamRun(cmd, args, opts),
   capture: (cmd, args, opts) => streamRun(cmd, args, opts, { wantOutput: true }),
   startBg(cmd, args, opts = {}) {
-    const p = spawn(cmd, args, { stdio: "ignore", shell: isWin, detached: false, ...opts });
+    const t = spawnTarget(cmd, args);
+    const p = spawn(t.cmd, t.args, { stdio: "ignore", shell: t.shell, detached: false, ...opts });
     bg.push(p);
     return p;
   },

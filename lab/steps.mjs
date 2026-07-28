@@ -27,7 +27,7 @@
  * opts: { panes?: boolean }  — panes=true adds the Nino-storefront moments
  * (browser lab); false keeps ./launch_terminal_only.sh byte-identical to the pre-refactor lab.
  */
-import { writeFileSync, readFileSync, openSync } from "node:fs";
+import { writeFileSync, readFileSync, openSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { wireWidgets } from "./wire.mjs";
@@ -39,6 +39,23 @@ export const BACKEND_LW = join(ROOT, "resiresi-backend-lightweight");
 export const isWin = process.platform === "win32";
 export const NPX = isWin ? "npx.cmd" : "npx";
 export const NPM = isWin ? "npm.cmd" : "npm";
+
+/** Resolve a spawn target that needs NO shell. On Windows, npm/npx are .cmd
+ *  shims — spawning those requires shell:true (and Node 22+ warns that
+ *  args-with-shell are concatenated, not escaped). npm ships inside the Node
+ *  install, so we bypass the shims and run its JS entrypoints with node
+ *  directly. Fallback: the shim + shell, for exotic Node layouts. */
+export function spawnTarget(cmd, args) {
+  if (!isWin) return { cmd, args, shell: false };
+  const shim = cmd.toLowerCase();
+  if (shim === "npx.cmd" || shim === "npm.cmd") {
+    const cli = join(dirname(process.execPath), "node_modules", "npm", "bin",
+      shim === "npx.cmd" ? "npx-cli.js" : "npm-cli.js");
+    if (existsSync(cli)) return { cmd: process.execPath, args: [cli, ...args], shell: false };
+  }
+  // Not a shim we know (or npm isn't next to node.exe): .cmd needs a shell.
+  return { cmd, args, shell: shim.endsWith(".cmd") || shim.endsWith(".bat") };
+}
 
 // Every APIblaze call goes through npx with --yes, so npx fetches the CLI once
 // (first use) WITHOUT its interactive "Ok to proceed?" prompt, then reuses it.

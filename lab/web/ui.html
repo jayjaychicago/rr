@@ -376,7 +376,7 @@ const handlers = {
   fatal(e) {
     const d = document.createElement("div");
     d.className = "banner-fatal";
-    d.textContent = "✗ " + e.message + "\nFix the issue, then restart ./launch.sh — the lab resumes where it left off.";
+    d.textContent = "✗ " + e.message + "\nFix the issue, then restart ./launch.sh (Windows: .\\launch.cmd) — the lab resumes where it left off.";
     rail.appendChild(d); d.scrollIntoView({ behavior: "smooth" });
   },
 };
