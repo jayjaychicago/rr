@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { spawn, exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { runLab, isWin, spawnTarget } from "../steps.mjs";
+import { runLab, isWin, spawnTarget, displayCommand } from "../steps.mjs";
 
 const PORT = 3333;
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -65,7 +65,7 @@ process.on("SIGTERM", () => { cleanup(); process.exit(143); });
  *  design — every command the lab runs works without a TTY (login included:
  *  it prints the URL+code and polls; the UI renders the URL as a link). */
 function streamRun(cmd, args, opts = {}, { wantOutput = false } = {}) {
-  const shown = [cmd, ...args].join(" ");
+  const shown = displayCommand(cmd, args);
   emit({ type: "log", text: s.dim("$ " + shown) + "\n" });
   return new Promise((res, rej) => {
     const t = spawnTarget(cmd, args);

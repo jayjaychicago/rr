@@ -9,7 +9,7 @@
  */
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { runLab, spawnTarget } from "./steps.mjs";
+import { runLab, spawnTarget, displayCommand } from "./steps.mjs";
 
 // ── styling ──────────────────────────────────────────────────────────────────
 const c = (n, str) => `\x1b[${n}m${str}\x1b[0m`;
@@ -36,7 +36,7 @@ process.on("SIGINT", () => { cleanup(); process.exit(130); });
  *  the login flow) eat every other Enter. rl.pause() releases stdin to the
  *  child; resume when it exits so the next "Press Enter" works. */
 function run(cmd, args, opts = {}) {
-  const shown = [cmd, ...args].join(" ");
+  const shown = displayCommand(cmd, args);
   console.log(s.dim("$ " + shown));
   rl.pause();
   return new Promise((res, rej) => {
@@ -50,7 +50,7 @@ function run(cmd, args, opts = {}) {
 
 /** Run and capture stdout (still echoes to the user). Same stdin handoff as run(). */
 function capture(cmd, args, opts = {}) {
-  const shown = [cmd, ...args].join(" ");
+  const shown = displayCommand(cmd, args);
   console.log(s.dim("$ " + shown));
   rl.pause();
   return new Promise((res, rej) => {

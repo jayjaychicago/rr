@@ -72,6 +72,39 @@ export const CLI = LOCAL_CLI
   ? { cmd: process.execPath, pre: [LOCAL_CLI] }
   : { cmd: NPX, pre: ABZ };
 
+// Shell-quote ONE argv token for DISPLAY so the echoed "$ …" line is copy-pasteable.
+// Without this, a free-text argument (e.g. the `rule` prompt: `rule Bookings belong
+// to whoever… "reservationists"… --enforce`) is joined raw and the shell would split
+// it into dozens of args and choke on the embedded quotes. Wrap anything that isn't a
+// bare safe token in single quotes (escaping embedded single quotes the POSIX way).
+export function shellQuote(a) {
+  if (a === "") return "''";
+  if (/^[A-Za-z0-9_@%+=:,.\/-]+$/.test(a)) return a; // bare token — no quotes needed
+  return "'" + String(a).replace(/'/g, "'\\''") + "'";
+}
+/** Join an argv array into a copy-pasteable command line (each token shell-quoted). */
+export function showArgv(parts) {
+  return parts.map(shellQuote).join(" ");
+}
+
+// Turn the RAW spawn target (cmd + argv) into the clean command a user would paste.
+// The lab SPAWNS the CLI as `npx.cmd --yes apiblaze@0.19.16 …` (Windows shim +
+// auto-confirm install + pinned version) and, in dev, as `node …/dist/index.js …`.
+// None of that belongs in the shown command — a user just types `npx apiblaze …`.
+// So collapse both spawn shapes to `npx apiblaze <args>`, drop the machine-only
+// `--json`, strip a `.cmd` shim off any other command, and shell-quote every token.
+export function displayCommand(cmd, args) {
+  const isNpx = /(^|[\\/])npx(\.cmd)?$/i.test(String(cmd));
+  if (isNpx && args[0] === "--yes" && /^apiblaze@/.test(args[1] || "")) {
+    return "npx apiblaze " + showArgv(args.slice(2).filter((a) => a !== "--json"));
+  }
+  // Dev escape hatch: `node /abs/.../index.js <rest>` → same friendly form.
+  if (cmd === process.execPath && /index\.js$/i.test(args[0] || "")) {
+    return "npx apiblaze " + showArgv(args.slice(1).filter((a) => a !== "--json"));
+  }
+  return showArgv([String(cmd).replace(/\.cmd$/i, ""), ...args]);
+}
+
 // ── lab state (so the same suffix is reused across a run) ────────────────────
 const STATE = join(ROOT, "lab", ".state.json");
 export function loadState() { try { return JSON.parse(readFileSync(STATE, "utf8")); } catch { return {}; } }
@@ -141,7 +174,7 @@ export async function runLab(io, opts = {}) {
   const abzCapture = (args, o) => io.capture(CLI.cmd, [...CLI.pre, ...args], o);
   // Friendly display form of an APIblaze invocation: the real `npx apiblaze …`
   // command the user would type, minus only the machine-only --json flag.
-  const abzDisplay = (args) => "npx apiblaze " + args.filter((a) => a !== "--json").join(" ");
+  const abzDisplay = (args) => "npx apiblaze " + showArgv(args.filter((a) => a !== "--json"));
 
   io.print(bold("\n  ResiResi × APIblaze — guided lab\n"));
   io.print(dim("  You are ResiResi, a reservation platform with two restaurant tenants,\n" +
@@ -577,7 +610,7 @@ export async function runLab(io, opts = {}) {
       [{ key: "s", label: "Skip" }, { key: "r", label: "Re-run" }], "s");
     if (String(again).toLowerCase().startsWith("r")) await abz(ruleArgs);
   } else {
-    await io.pause(P.runStep, `npx apiblaze rule "${RULE.replace(/"/g, '\\"')}" ${PROXY} --enforce`);
+    await io.pause(P.runStep, abzDisplay(ruleArgs));
     await abz(ruleArgs);
     markDone("authz");
     io.print(dim("  (want to refine it later? chat interactively: npx apiblaze agent authz " + PROXY + ")"));
