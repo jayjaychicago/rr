@@ -91,16 +91,19 @@ export function showArgv(parts) {
 // The lab SPAWNS the CLI as `npx.cmd --yes apiblaze@0.19.16 …` (Windows shim +
 // auto-confirm install + pinned version) and, in dev, as `node …/dist/index.js …`.
 // None of that belongs in the shown command — a user just types `npx apiblaze …`.
-// So collapse both spawn shapes to `npx apiblaze <args>`, drop the machine-only
-// `--json`, strip a `.cmd` shim off any other command, and shell-quote every token.
+// So collapse both spawn shapes to `npx apiblaze <args>`, strip a `.cmd` shim off
+// any other command, and shell-quote every token. What is shown is exactly what
+// runs — including --json. Hiding that flag used to make the command in a step's
+// pause differ from the one the lab actually ran, which in terminal mode would
+// have asked you to run `create` a second time to get parseable output.
 export function displayCommand(cmd, args) {
   const isNpx = /(^|[\\/])npx(\.cmd)?$/i.test(String(cmd));
   if (isNpx && args[0] === "--yes" && /^apiblaze@/.test(args[1] || "")) {
-    return "npx apiblaze " + showArgv(args.slice(2).filter((a) => a !== "--json"));
+    return "npx apiblaze " + showArgv(args.slice(2));
   }
   // Dev escape hatch: `node /abs/.../index.js <rest>` → same friendly form.
   if (cmd === process.execPath && /index\.js$/i.test(args[0] || "")) {
-    return "npx apiblaze " + showArgv(args.slice(1).filter((a) => a !== "--json"));
+    return "npx apiblaze " + showArgv(args.slice(1));
   }
   return showArgv([String(cmd).replace(/\.cmd$/i, ""), ...args]);
 }
@@ -172,9 +175,9 @@ export async function runLab(io, opts = {}) {
 
   const abz = (args, o) => io.run(CLI.cmd, [...CLI.pre, ...args], o);
   const abzCapture = (args, o) => io.capture(CLI.cmd, [...CLI.pre, ...args], o);
-  // Friendly display form of an APIblaze invocation: the real `npx apiblaze …`
-  // command the user would type, minus only the machine-only --json flag.
-  const abzDisplay = (args) => "npx apiblaze " + showArgv(args.filter((a) => a !== "--json"));
+  // Display form of an APIblaze invocation: exactly the `npx apiblaze …` the lab
+  // runs, so a shown command and a run command can never disagree.
+  const abzDisplay = (args) => "npx apiblaze " + showArgv(args);
 
   io.print(bold("\n  ResiResi × APIblaze — guided lab\n"));
   io.print(dim("  You are ResiResi, a reservation platform with two restaurant tenants,\n" +
@@ -222,11 +225,11 @@ export async function runLab(io, opts = {}) {
     // CLI already fetched on the prior run; skip the whole tool-check step.
   } else {
     io.step("Check your tools", "This lab needs Node 20+ and npx (both ship with Node.js).");
-    await io.pause();
+    await io.pause(P.runStep, "node --version && npx apiblaze --version");
     const major = Number(process.versions.node.split(".")[0]);
     if (major < 20) throw new Error(`Node 20+ required — you have ${process.versions.node}. https://nodejs.org`);
     io.print(green(`  Node ${process.versions.node} · npx ✓`));
-    io.print(dim("  Fetching the APIblaze CLI via npx (first time only)…"));
+    io.print(dim("  Making sure the APIblaze CLI is available (npx fetches it the first time)…"));
     await io.run(CLI.cmd, [...CLI.pre, "--version"]);
     io.print(green("  APIblaze CLI ready ✓"));
     markDone("preflight");
@@ -262,8 +265,9 @@ export async function runLab(io, opts = {}) {
     skipNote();
     io.print(dim("  (if the session expired, run  npx apiblaze login  yourself and re-run)"));
   } else {
-    await io.pause(P.runStep, "apiblaze login");
-    await abz(["login", ...(panes ? ["--team", "default"] : [])]);
+    const loginArgs = ["login", ...(panes ? ["--team", "default"] : [])];
+    await io.pause(P.runStep, abzDisplay(loginArgs));
+    await abz(loginArgs);
     markDone("login");
   }
 
@@ -455,7 +459,12 @@ export async function runLab(io, opts = {}) {
   io.pane({ type: "mount", pane: "resiresi", url: "http://localhost:3003/developers",
     note: isDone("wire2")
       ? "ResiResi's Developers page — the two widgets are live here."
-      : "ResiResi's Developers page — note the two empty spots where the widgets will go." });
+      : "ResiResi's Developers page — note the two empty spots where the widgets will go.",
+    click: isDone("wire2") ? null : "Nothing to click yet — just look at this pane.",
+    verify: isDone("wire2")
+      ? ["The API keys widget and the Users & Groups widget are both on the page"]
+      : ["Two empty placeholder spots, one for each widget",
+         "This is ResiResi's OWN app — the widgets drop into it next"] });
 
   // 9 · wire widgets (hot-reloads into the running app)
   io.step("Add the two widgets to ResiResi's Developers page",
@@ -466,7 +475,8 @@ export async function runLab(io, opts = {}) {
     "  • rr/resiresi-frontend/app/api/apiblaze/groups/route.ts\n" +
     "(the two routes keep the widget key on the server), then mounts the API-key\n" +
     "and Users & Groups widgets in rr/resiresi-frontend/app/developers/page.tsx —\n" +
-    "the running app picks them up instantly.");
+    "the running app picks them up instantly.\n" +
+    "This one is a file edit the lab performs for you, so there's no command to run.");
   if (isDone("wire2")) {
     skipNote();
   } else {
@@ -474,7 +484,12 @@ export async function runLab(io, opts = {}) {
     wireWidgets(FE, PROXY.slice("resiresi".length));
     io.print(green("  3 files created + widgets mounted ✓"));
     markDone("wire2");
-    io.pane({ type: "refresh", pane: "resiresi", note: "The two widgets just appeared where the placeholders were." });
+    io.pane({ type: "refresh", pane: "resiresi",
+      note: "The two widgets just appeared where the placeholders were.",
+      click: "Look at this pane — nothing to click yet.",
+      verify: ["An API keys widget, with a button to create a key",
+               "A Users & Groups widget",
+               "The app never restarted — they loaded into the running page"] });
   }
 
   // 10 · crown the admin, then sign in as them (one step — the admin is named
@@ -497,7 +512,12 @@ export async function runLab(io, opts = {}) {
   }
   io.print(dim(`\n  Done — now open  http://localhost:3003/developers  and sign in with any\n` +
     `  name and the email  ${OWNER} . Both widgets appear, ready to use.`));
-  io.pane({ type: "banner", pane: "resiresi", note: `Sign in here with any name and the email ${OWNER} — both widgets appear, ready to use.`, copy: OWNER, url: "http://localhost:3003/developers" });
+  io.pane({ type: "banner", pane: "resiresi",
+    note: `Sign in here with any name and the email ${OWNER}.`,
+    click: "Use the sign-in form in this pane. Any name you like — but that exact email.",
+    verify: ["You land back on the Developers page, signed in",
+             "Both widgets now show real content instead of a sign-in prompt"],
+    copy: OWNER, url: "http://localhost:3003/developers" });
   await io.pause(P.signedIn);
   // They confirmed they're signed in — the instruction has served its purpose.
   io.pane({ type: "clear", pane: "resiresi" });
@@ -538,7 +558,11 @@ export async function runLab(io, opts = {}) {
       await waitFor(async () => { p.tick(); return await httpOk("http://localhost:3001/"); }, { what: "Nino's site" });
       p.end(green("  up ✓"));
     }
-    io.pane({ type: "mount", pane: "nino", url: "http://localhost:3001/", note: "Nino's Pizza — every reservation call here goes through your proxy." });
+    io.pane({ type: "mount", pane: "nino", url: "http://localhost:3001/",
+      note: "Nino's Pizza — every reservation call here goes through your proxy.",
+      click: "Nothing to click yet — this is the storefront a diner would use.",
+      verify: ["The page loads real reservation data",
+               "That data travelled: this page → your proxy → the tunnel → your laptop"] });
   }
 
   await ensureTunnel();
@@ -546,7 +570,10 @@ export async function runLab(io, opts = {}) {
     "Maria has a reservation at Nino's. John is a different diner — but with the\n" +
     "app's key, nothing stops him from opening HER booking by its id:");
   if (panes && MARIA_RESI) {
-    io.pane({ type: "banner", pane: "nino", note: "Sign in as john@nino.com, then open Maria's reservation →",
+    io.pane({ type: "banner", pane: "nino", note: "Sign in as John, then open a booking that isn't his.",
+      click: "Click “sign in as John” below, then “Maria's reservation”.",
+      verify: ["Maria's booking opens for John — her name, her party size, her time",
+               "Nothing stopped him: that is exactly the problem this lab fixes"],
       url: `http://localhost:3001/auth/signin?email=john@nino.com&name=John`, goLabel: "sign in as John",
       link: { label: "Maria's reservation", url: `http://localhost:3001/reservations/${MARIA_RESI}` } });
   }
@@ -581,7 +608,12 @@ export async function runLab(io, opts = {}) {
     const how = await io.choice(P.groupHow,
       [{ key: "w", label: "Widget" }, { key: "t", label: "Terminal" }], "t");
     if (String(how).toLowerCase().startsWith("w")) {
-      io.pane({ type: "banner", pane: "resiresi", note: "In Users & Groups: + New user → maria@nino.com · + New group → reservationists · add maria as a member.", copy: "maria@nino.com" });
+      io.pane({ type: "banner", pane: "resiresi",
+        note: "Build the group in the Users & Groups widget.",
+        click: "In this pane: + New user → maria@nino.com, then + New group → reservationists, then add maria to it.",
+        verify: ["A group named reservationists exists",
+                 "maria@nino.com is listed inside it (John is not)"],
+        copy: "maria@nino.com" });
       await io.pause(P.widgetDone);
       io.pane({ type: "clear", pane: "resiresi" });
     } else {
@@ -593,7 +625,11 @@ export async function runLab(io, opts = {}) {
     markDone("group");
     // Reload the Developers pane either way: the widget lands with the fresh
     // reservationists group EXPANDED (defaultOpenGroup) — maria visibly inside.
-    io.pane({ type: "refresh", pane: "resiresi", note: "reservationists is open in Users & Groups — maria's in it." });
+    io.pane({ type: "refresh", pane: "resiresi",
+      note: "reservationists is open in Users & Groups — maria's in it.",
+      click: "Look at the Users & Groups widget in this pane.",
+      verify: ["The reservationists group is expanded",
+               "maria@nino.com appears as a member"] });
   }
 
   // 14 · one-shot rule (plain English → enforced authorization)
@@ -669,7 +705,11 @@ export async function runLab(io, opts = {}) {
 
     if (panes) {
       io.pane({ type: "banner", pane: "nino",
-        note: "See it in the UI: as john@nino.com, Maria's reservation now shows “not yours”; John's own still opens. Then switch to maria@nino.com — everything opens.",
+        note: "Now watch the same three calls play out in the real UI.",
+        click: "Still signed in as John: open Maria's reservation, then his own. Then switch to Maria and open either.",
+        verify: ["As John, Maria's reservation is refused — the page says it isn't his",
+                 "As John, his OWN booking still opens normally",
+                 "As Maria (she's in reservationists), every reservation opens"],
         link: MARIA_RESI ? { label: "Maria's reservation (as John → blocked)", url: `http://localhost:3001/reservations/${MARIA_RESI}` } : undefined,
         link2: JOHN_RESI ? { label: "John's booking (his own → opens)", url: `http://localhost:3001/reservations/${JOHN_RESI}` } : undefined,
         url: "http://localhost:3001/auth/signin?email=maria@nino.com&name=Maria", goLabel: "switch to Maria" });

@@ -13,6 +13,21 @@ Two ways to run the same lab:
 - **`./launch_terminal_only.sh` — in your terminal.** Same steps, same commands, no browser
   chrome.
 
+Inside the browser lab there is a second choice, top-left: **who runs the
+commands.**
+
+- **Web** (the default) — the lab runs each command for you and streams the
+  output into the step.
+- **Terminal** — the lab runs nothing. Each step shows its command; you copy it,
+  run it in your own terminal, and click to move on. The long-running ones (the
+  backend, the tunnel, the two apps) each need their own terminal window, left
+  open. Two commands print something the lab needs back — creating the proxy and
+  minting the key — so those steps ask you to paste what they printed.
+
+Switch at any point; it applies from the next command on. Either way the panes
+on the right behave the same, and the lab still makes its own check calls so it
+can show you the results.
+
 ## The scenario
 
 You are **ResiResi**, a restaurant-reservation platform with two tenants,

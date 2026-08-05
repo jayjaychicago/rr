@@ -17,8 +17,8 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { spawn, exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-import { runLab, isWin, spawnTarget, displayCommand } from "../steps.mjs";
+import { dirname, join, relative } from "node:path";
+import { runLab, isWin, spawnTarget, displayCommand, ROOT } from "../steps.mjs";
 
 const PORT = 3333;
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -42,6 +42,37 @@ function emit(evt) {
   const line = `data: ${JSON.stringify(e)}\n\n`;
   for (const res of clients) res.write(line);
   return e;
+}
+
+// ── run mode ─────────────────────────────────────────────────────────────────
+// 'web'      — the lab runs every command for you (the original behaviour).
+// 'terminal' — the lab never runs them: it shows each command, you paste it into
+//              your own terminal, and click to move on. A guided doc, not a
+//              robot. The engine (steps.mjs) is untouched by this: the switch
+//              lives entirely in the three io methods that touch a shell, so
+//              there is no second copy of the sequence to keep in step.
+// The lab's own verification calls (the smoke test, the four BEFORE/AFTER beats)
+// still run in both modes — they are how the lab SHOWS you the result, and their
+// curl equivalents are printed anyway.
+let mode = "web";
+const manual = () => mode === "terminal";
+
+// The command block a step's pause most recently put on screen. In terminal mode
+// it decides whether a command still needs its own prompt: most steps pause with
+// the command first ("I ran it →"), so re-asking would double-prompt. But some
+// run commands with NO preceding pause — the group step runs two CLI calls
+// straight after a Widget/Terminal choice — and those must be asked for, or the
+// lab would claim "you ran this yourself" for something never shown, then report
+// the group as created when it does not exist. A pause with no command clears
+// it, so a later unrelated command can't be waved through by a stale match.
+let lastShown = null;
+const alreadyShown = (cmdLine) => !!lastShown && lastShown.includes(cmdLine);
+
+/** Where a command has to be run from, for the paste prompts. */
+function cwdHint(opts) {
+  const cwd = opts && opts.cwd;
+  if (!cwd || cwd === ROOT) return "Run it from the rr folder — the one holding launch.sh.";
+  return `Run it from ${relative(ROOT, cwd) || "the rr folder"}/ inside the rr folder.`;
 }
 
 // Pending user interaction: at most ONE at a time (the lab is sequential).
@@ -106,6 +137,7 @@ const io = {
     emit({ type: "step", n: N, title, explain: explain || "" });
   },
   async pause(msg = "Ready? Run this step", cmd) {
+    lastShown = cmd || null;
     const evt = emit({ type: "prompt", kind: "pause", msg, cmd: cmd || null });
     await waitAction(evt);
   },
@@ -119,9 +151,44 @@ const io = {
     const v = await waitAction(evt);
     return (typeof v === "string" && v) || defKey;
   },
-  run: (cmd, args, opts) => streamRun(cmd, args, opts),
-  capture: (cmd, args, opts) => streamRun(cmd, args, opts, { wantOutput: true }),
+  async run(cmd, args, opts) {
+    if (!manual()) return streamRun(cmd, args, opts);
+    const shown = displayCommand(cmd, args);
+    if (alreadyShown(shown)) {
+      // The step's pause already showed it and you clicked "I ran it".
+      emit({ type: "log", text: s.dim("  ↳ you ran this yourself: ") + s.green(shown) + "\n" });
+      return;
+    }
+    const evt = emit({ type: "prompt", kind: "pause", msg: "Run this, then continue",
+      cmd: shown, hint: cwdHint(opts) });
+    await waitAction(evt);
+  },
+  async capture(cmd, args, opts) {
+    if (!manual()) return streamRun(cmd, args, opts, { wantOutput: true });
+    // The lab NEEDS this command's output (it carries the proxy URL / the key),
+    // so terminal mode has to ask for it back. --json is kept in the shown
+    // command here precisely so what you paste is parseable.
+    const shown = displayCommand(cmd, args);
+    const repeat = !alreadyShown(shown);
+    const evt = emit({
+      type: "prompt", kind: "paste",
+      msg: repeat ? "Run this in your terminal, then paste everything it printed"
+                  : "Paste everything that command printed",
+      cmd: repeat ? shown : null,
+      hint: (repeat ? cwdHint(opts) + " " : "") + "If it errored, fix it and re-run before pasting.",
+      expect: args.includes("--json") ? "json" : "text",
+    });
+    const v = await waitAction(evt);
+    return String(v ?? "");
+  },
   startBg(cmd, args, opts = {}) {
+    if (manual()) {
+      // Long-running: it must get its OWN terminal window, or closing the one
+      // you typed in kills it and the next step hangs waiting for the service.
+      emit({ type: "log", text: s.yellow("  ↳ this one keeps running — give it its own terminal window and leave it open:\n") +
+        s.green("    " + displayCommand(cmd, args)) + "\n" });
+      return { kill() {} };
+    }
     const t = spawnTarget(cmd, args);
     const p = spawn(t.cmd, t.args, { stdio: "ignore", shell: t.shell, detached: false, ...opts });
     bg.push(p);
@@ -159,6 +226,18 @@ const server = createServer((req, res) => {
     req.on("close", () => clients.delete(res));
     return;
   }
+  if (url.pathname === "/mode" && req.method === "POST") {
+    let body = "";
+    req.on("data", (d) => (body += d));
+    req.on("end", () => {
+      const next = (() => { try { return JSON.parse(body || "{}").mode; } catch { return null; } })();
+      if (next !== "web" && next !== "terminal") { res.writeHead(400).end('{"error":"mode must be web|terminal"}'); return; }
+      mode = next;
+      emit({ type: "mode", mode });
+      res.writeHead(200).end("{}");
+    });
+    return;
+  }
   if (url.pathname === "/action" && req.method === "POST") {
     let body = "";
     req.on("data", (d) => (body += d));
@@ -190,6 +269,7 @@ server.listen(PORT, () => {
     : isWin ? `start "" "${url}"` : `xdg-open "${url}"`;
   exec(open, () => { /* headless is fine — the URL is printed */ });
 
+  emit({ type: "mode", mode });
   runLab(io, { panes: true })
     .then(() => emit({ type: "done" }))
     .catch((e) => {
