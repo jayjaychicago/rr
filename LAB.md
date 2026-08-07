@@ -28,6 +28,13 @@ Switch at any point; it applies from the next command on. Either way the panes
 on the right behave the same, and the lab still makes its own check calls so it
 can show you the results.
 
+Each pane also carries an **identity strip**: who that pane is acting as. The
+platform pane is always Nino's owner. The storefront pane has two diners, **John**
+and **Maria** — click either to become them. One click sets the session and
+reloads the page; there is no sign-in form anywhere in the lab. That strip is the
+payoff at the end: with the rules enforced, clicking between John and Maria on
+the *same* booking flips it between refused and open.
+
 ## The scenario
 
 You are **ResiResi**, a restaurant-reservation platform with two tenants,
@@ -80,11 +87,11 @@ runs it:
    at your local API, with identity + IAM turned on.
 3. Opens the localhost tunnel and proves the proxy reaches your machine.
 4. Mints the control-plane widget key.
-5. Crowns you the first tenant admin.
-6. Installs the platform app and starts it. You sign in as that admin, landing
-   on a Developers page with two **empty placeholder spots** — then it **wires
-   the two widgets** into the running app, so you watch them appear where the
-   placeholders were, ready to use.
+5. Crowns Nino's owner (`owner@nino.com`) the first tenant admin.
+6. Installs the platform app and starts it. The pane opens it already signed in
+   as that owner, on a Developers page with two **empty placeholder spots** —
+   then it **wires the two widgets** into the running app, so you watch them
+   appear where the placeholders were, ready to use.
 7. Walks the before/after: John (a diner) can open Maria's reservation → you put
    staff in a group and turn one plain-English sentence into enforced rules
    (`npx apiblaze rule "…" --enforce`) → John's own booking still opens, Maria's

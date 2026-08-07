@@ -112,7 +112,7 @@
   .seg button.on { background: var(--accent); color: #fff; }
   #mode .why { font-size: 12px; color: var(--dim); margin-top: 7px; }
   /* ── panes ── */
-  .pane { display: grid; grid-template-rows: 34px 1fr; min-height: 0;
+  .pane { display: grid; grid-template-rows: 34px auto 1fr; min-height: 0;
     background: var(--panel); border: 1px solid var(--edge); border-radius: 12px; overflow: hidden;
     transition: box-shadow .3s, border-color .3s; }
   .pane.glow { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
@@ -126,9 +126,32 @@
   .pane .bar a { color: var(--accent2); text-decoration: none; font-size: 11px; white-space: nowrap; }
   .pane .bar button { background: none; border: 1px solid var(--edge); color: var(--dim);
     border-radius: 6px; font-size: 11px; cursor: pointer; padding: 1px 8px; }
-  /* Explicit row: the body is the only thing under the bar, and it is the
-     positioning context for the coach callout that floats over the app. */
-  .pane .body { grid-row: 2; min-height: 0; position: relative; }
+  /* ── identity strip: WHO the pane is acting as ── */
+  .pane .who { display: none; grid-row: 2; align-items: center; gap: 8px; padding: 7px 10px;
+    background: #16121f; border-bottom: 1px solid var(--edge); overflow-x: auto; }
+  .pane .who.show { display: flex; }
+  .pane .who .lbl { font-size: 11px; color: var(--dim); text-transform: uppercase;
+    letter-spacing: .04em; margin-right: 2px; white-space: nowrap; }
+  .actor {
+    display: flex; align-items: center; gap: 8px; background: none; cursor: pointer;
+    border: 1px solid var(--edge); border-radius: 999px; padding: 4px 12px 4px 4px;
+    color: var(--dim); font-family: inherit; white-space: nowrap; transition: .15s;
+  }
+  .actor:hover { border-color: var(--accent2); color: var(--text); }
+  .actor .av {
+    width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center;
+    font-weight: 700; font-size: 13px; color: #fff; flex-shrink: 0;
+  }
+  .actor .nm { font-size: 13px; font-weight: 700; line-height: 1.1; }
+  .actor .rl { font-size: 10.5px; opacity: .8; line-height: 1.1; }
+  .actor.on { border-color: var(--accent); background: rgba(139,92,246,.18); color: var(--text); }
+  .actor.on .av { box-shadow: 0 0 0 2px var(--accent); }
+  .actor[disabled] { cursor: default; opacity: 1; }
+  .pane .who .only { color: var(--dim); font-size: 11px; }
+  /* Explicit row: without it, a hidden identity strip stops being a grid item
+     and the body slides up into the `auto` row, collapsing to the iframe's
+     default 150px height. */
+  .pane .body { grid-row: 3; min-height: 0; position: relative; }
   .pane .content { position: absolute; inset: 0; }
   .pane iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
   .pane .placeholder {
@@ -188,6 +211,7 @@
   <div class="pane" id="pane-resiresi">
     <div class="bar"><span class="t">ResiResi · Developers</span><span class="u"></span>
       <button onclick="reloadPane('resiresi')">↻</button><a target="_blank" href="#" class="ext" style="display:none">open in tab ↗</a></div>
+    <div class="who"></div>
     <div class="body">
       <div class="content"><div class="placeholder"><div class="big">🧩</div>
         <div><b>ResiResi's Developers page</b> appears here<br>once its app starts (around step 8).</div></div></div>
@@ -198,6 +222,7 @@
   <div class="pane" id="pane-nino">
     <div class="bar"><span class="t">Nino's Pizza · storefront</span><span class="u"></span>
       <button onclick="reloadPane('nino')">↻</button><a target="_blank" href="#" class="ext" style="display:none">open in tab ↗</a></div>
+    <div class="who"></div>
     <div class="body">
       <div class="content"><div class="placeholder"><div class="big">🍕</div>
         <div><b>Nino's Pizza</b> — a real storefront calling the API<br>through your proxy — appears in the prove phase.</div></div></div>
@@ -329,6 +354,65 @@ function glow(name) {
   const pane = document.getElementById("pane-" + name);
   pane.classList.add("glow");
   setTimeout(() => pane.classList.remove("glow"), 2600);
+}
+
+// ── identity picker ──────────────────────────────────────────────────────────
+// Who is this pane acting as. Clicking an avatar navigates the iframe to that
+// app's one-click identity route, which sets the session cookie and lands on
+// the page — so switching person is one click, not a form.
+//
+// The lab drives it too: re-emitting `identities` with a different `active` (or
+// with the same actors pointed at a different page) moves the pane, which is
+// how the AFTER beat shows the SAME reservation opening for Maria and being
+// refused for John. That comparison is the whole payoff, and it should cost a
+// click, not two sign-ins.
+const actorState = {}; // pane -> { actors, active }
+
+function showIdentities(name, e) {
+  const pane = document.getElementById("pane-" + name);
+  const strip = $(".who", pane);
+  const actors = e.actors || [];
+  actorState[name] = { actors, active: e.active };
+  strip.innerHTML = "";
+  if (!actors.length) { strip.classList.remove("show"); return; }
+
+  const lbl = document.createElement("span");
+  lbl.className = "lbl";
+  lbl.textContent = actors.length > 1 ? "acting as" : "signed in as";
+  strip.appendChild(lbl);
+
+  for (const a of actors) {
+    const b = document.createElement("button");
+    b.className = "actor" + (a.key === e.active ? " on" : "");
+    b.innerHTML =
+      `<span class="av" style="background:${esc(a.color || "#8b5cf6")}">${esc(a.initials || "?")}</span>` +
+      `<span><span class="nm">${esc(a.name)}</span><br><span class="rl">${esc(a.role || a.sub || "")}</span></span>`;
+    // A single-actor strip states a fact; there is nothing to switch to.
+    if (actors.length === 1) b.disabled = true;
+    else b.onclick = () => switchActor(name, a.key);
+    strip.appendChild(b);
+  }
+  if (actors.length === 1) {
+    const only = document.createElement("span");
+    only.className = "only";
+    only.textContent = actors[0].sub || "";
+    strip.appendChild(only);
+  }
+  strip.classList.add("show");
+  if (e.navigate) switchActor(name, e.active);
+}
+
+function switchActor(name, key) {
+  const st = actorState[name];
+  if (!st) return;
+  const actor = st.actors.find((a) => a.key === key);
+  if (!actor) return;
+  st.active = key;
+  for (const b of document.querySelectorAll("#pane-" + name + " .actor")) b.classList.remove("on");
+  const idx = st.actors.indexOf(actor);
+  const btns = document.querySelectorAll("#pane-" + name + " .actor");
+  if (btns[idx]) btns[idx].classList.add("on");
+  navPane(name, actor.url);
 }
 
 // The coach callout: ONE mechanism for every "your turn, in this pane" moment.
@@ -511,6 +595,7 @@ const handlers = {
   },
   pane(e) {
     if (e.pane !== "resiresi" && e.pane !== "nino") return;
+    if (e.kind === "identities") { showIdentities(e.pane, e); return; }
     if (e.kind === "mount" && e.url) mountPane(e.pane, e.url);
     if (e.kind === "refresh") reloadPane(e.pane);
     if (e.kind === "clear") { hideCoach(e.pane); return; }

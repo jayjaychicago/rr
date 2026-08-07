@@ -124,7 +124,6 @@ const io = {
     runStep: "Ready? Run this step",
     begin: "Ready to begin?",
     cont: "Continue when ready",
-    signedIn: "Signed in? Then continue",
     widgetDone: "Done in the widget? Then continue",
     groupHow: "Pick how to create the group",
     rerunRule: "Skip, or re-run the rule?",

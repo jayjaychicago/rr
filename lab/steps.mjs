@@ -164,7 +164,6 @@ export async function runLab(io, opts = {}) {
     runStep: "Press Enter to run this step",
     begin: "Press Enter to begin",
     cont: "Press Enter to continue",
-    signedIn: "Signed in? Press Enter",
     widgetDone: "Done in the widget? Press Enter",
     groupHow: "type w for widget, or press Enter for terminal",
     rerunRule: "press Enter to skip, or type r to re-run the rule",
@@ -172,6 +171,32 @@ export async function runLab(io, opts = {}) {
     terminalLabel: "[t]erminal",
     ...(io.phrases || {}),
   };
+
+  // The cast. Everyone the lab acts as is fixed: there is exactly one owner, and
+  // exactly two diners. Letting a tester invent an email only creates ways to
+  // break the run (sign in before the admin grant exists, typo the address that
+  // IS the diner's id) with nothing gained — every one of these names is already
+  // written into the seeded data and the rules you'll author.
+  const OWNER = "owner@nino.com";
+  const JOHN = { email: "john@nino.com", name: "John" };
+  const MARIA = { email: "maria@nino.com", name: "Maria" };
+  // One click = signed in. Each app exposes a demo identity route that sets its
+  // session cookie and lands on the page, so the panes never make you fill a
+  // sign-in form (see each app's app/api/dev-identity/route.ts).
+  const asOwner = (next = "/developers") =>
+    `http://localhost:3003/api/dev-identity?restaurant=nino&email=${encodeURIComponent(OWNER)}` +
+    `&name=Nino&next=${encodeURIComponent(next)}`;
+  const asDiner = (who, next = "/reservations") =>
+    `http://localhost:3001/api/dev-identity?email=${encodeURIComponent(who.email)}` +
+    `&name=${encodeURIComponent(who.name)}&next=${encodeURIComponent(next)}`;
+  const ownerActors = () => ([{ key: "owner", name: "Nino", role: "Owner", sub: OWNER,
+    initials: "N", color: "#8b5cf6", url: asOwner() }]);
+  const dinerActors = (johnNext, mariaNext) => ([
+    { key: "john", name: "John", role: "Diner", sub: JOHN.email,
+      initials: "J", color: "#0ea5e9", url: asDiner(JOHN, johnNext) },
+    { key: "maria", name: "Maria", role: "Staff", sub: MARIA.email,
+      initials: "M", color: "#f59e0b", url: asDiner(MARIA, mariaNext) },
+  ]);
 
   const abz = (args, o) => io.run(CLI.cmd, [...CLI.pre, ...args], o);
   const abzCapture = (args, o) => io.capture(CLI.cmd, [...CLI.pre, ...args], o);
@@ -446,14 +471,10 @@ export async function runLab(io, opts = {}) {
   // sign-in — and that sign-in has to be as the admin, or the widgets land for
   // the wrong person. Naming the admin first means one sign-in, done once.
   io.step("Make yourself the admin",
-    "ResiResi's app needs a first admin — the person who manages users & groups.\n" +
-    "You hold the manager key, so you name that admin here. You'll sign in as\n" +
-    "them the moment the app opens, in the next step. Pick the email (the\n" +
-    "default is fine — just sign in with the SAME one).");
-  const defaultEmail = state.ownerEmail || "owner@nino.com";
-  const answer = (await io.ask("Admin and Email you'll sign in as", defaultEmail)).trim();
-  const OWNER = answer || defaultEmail;
-  state.ownerEmail = OWNER; saveState(state);
+    `ResiResi's app needs a first admin — the person who manages users & groups.\n` +
+    `You hold the manager key, so you grant that now, to ${OWNER} (Nino's owner,\n` +
+    `who you'll be acting as in the app). Do it BEFORE the app opens and the\n` +
+    `Users & Groups widget is usable the moment you land on it.`);
   const adminArgs = ["admins", "add", OWNER, "--tenant", TENANT];
   if (isDone("admin:" + OWNER)) {
     skipNote();
@@ -463,16 +484,15 @@ export async function runLab(io, opts = {}) {
     markDone("admin:" + OWNER);
   }
 
-  // 9 · dev server, THEN sign in — so the Developers page is visible with its
-  // two EMPTY widget spots before the next step fills them (the reveal is the
-  // point: you watch the widgets appear in a running app, no restart). You must
-  // be signed in to see them at all, which is why that happens here and not later.
-  io.step("Start ResiResi's web app and sign in",
-    "Runs ResiResi's website on http://localhost:3003 in the background. It asks\n" +
-    "who you are before it shows anything: pick the restaurant, then sign in as\n" +
-    "the admin you just named. You land on the Developers page — where the two\n" +
-    "widget spots are still empty placeholders. The next step drops the real\n" +
-    "widgets into them, live.");
+  // 9 · dev server. The pane opens ALREADY signed in as the owner (its identity
+  // strip drives the app's one-click identity route), so the Developers page is
+  // visible with its two EMPTY widget spots before the next step fills them —
+  // the reveal is the point: you watch the widgets appear in a running app.
+  io.step("Start ResiResi's web app",
+    "Runs ResiResi's website on http://localhost:3003 in the background. The pane\n" +
+    "on the right opens it already signed in as Nino's owner — no forms — landing\n" +
+    "on the Developers page, where the two widget spots are still empty\n" +
+    "placeholders. The next step drops the real widgets into them, live.");
   await io.pause(P.runStep, "cd resiresi-frontend && npm run dev");
   io.startBg(NPM, ["run", "dev"], { cwd: FE, env: { ...process.env, APIBLAZE_CP_KEY: CPKEY } });
   {
@@ -481,22 +501,18 @@ export async function runLab(io, opts = {}) {
       { what: "the app" });
     p.end(green("  up ✓"));
   }
-  io.print(dim(`\n  Open  http://localhost:3003/developers  — it signs you in in two steps:\n` +
-    `    1. choose  Nino's Pizza\n` +
-    `    2. any name you like, with the email  ${OWNER}\n` +
-    `  Then you're on the Developers page.`));
-  io.pane({ type: "mount", pane: "resiresi", url: "http://localhost:3003/developers",
-    note: "ResiResi's app is up — it asks who you are before showing anything.",
-    click: `In this pane: Sign in next to Nino's Pizza, then any name with the email ${OWNER}.`,
+  // The terminal lab has no panes, so it gets the same one-click URL to paste.
+  io.print(dim(`\n  Open this and you are signed in as ${OWNER}, on the Developers page:\n`) +
+    green(`    ${asOwner()}`));
+  io.pane({ type: "mount", pane: "resiresi", url: asOwner() });
+  io.pane({ type: "identities", pane: "resiresi", actors: ownerActors(), active: "owner" });
+  io.pane({ type: "banner", pane: "resiresi",
+    note: "ResiResi's Developers page, signed in as Nino's owner.",
     verify: isDone("wire2")
-      ? ["You land on the Developers page",
-         "The API keys widget and the Users & Groups widget are both there"]
-      : ["You land on the Developers page",
-         "Two empty placeholder spots, one for each widget",
-         "This is ResiResi's OWN app — the widgets drop into those spots next"],
-    copy: OWNER, url: "http://localhost:3003/developers" });
-  await io.pause(P.signedIn);
-  // They confirmed they're signed in — the instruction has served its purpose.
+      ? ["The API keys widget and the Users & Groups widget are both there"]
+      : ["Two empty placeholder spots, one for each widget",
+         "This is ResiResi's OWN app — the widgets drop into those spots next"] });
+  await io.pause(P.cont);
   io.pane({ type: "clear", pane: "resiresi" });
 
   // 10 · wire widgets (hot-reloads into the running app, in front of you)
@@ -560,8 +576,11 @@ export async function runLab(io, opts = {}) {
       await waitFor(async () => { p.tick(); return await httpOk("http://localhost:3001/"); }, { what: "Nino's site" });
       p.end(green("  up ✓"));
     }
-    io.pane({ type: "mount", pane: "nino", url: "http://localhost:3001/",
+    io.pane({ type: "mount", pane: "nino", url: asDiner(JOHN, "/") });
+    io.pane({ type: "identities", pane: "nino", actors: dinerActors("/", "/"), active: "john" });
+    io.pane({ type: "banner", pane: "nino",
       note: "Nino's Pizza — the storefront a diner would use. Every reservation call it makes goes through your proxy.",
+      click: "Try the two diners at the top of this pane — one click switches who you are.",
       verify: ["The page loads real reservation data",
                "That data travelled: this page → your proxy → the tunnel → your laptop"] });
   }
@@ -571,12 +590,18 @@ export async function runLab(io, opts = {}) {
     "Maria has a reservation at Nino's. John is a different diner — but with the\n" +
     "app's key, nothing stops him from opening HER booking by its id:");
   if (panes && MARIA_RESI) {
-    io.pane({ type: "banner", pane: "nino", note: "Sign in as John, then open a booking that isn't his.",
-      click: "Click “sign in as John” below, then “Maria's reservation”.",
+    // Point BOTH diners at Maria's booking and switch to John. Now the identity
+    // strip is an A/B on one page: same URL, same app key, different person.
+    const mariaPage = `/reservations/${MARIA_RESI}`;
+    io.pane({ type: "identities", pane: "nino",
+      actors: dinerActors(mariaPage, mariaPage), active: "john", navigate: true });
+    // No "switch to Maria" prompt here on purpose: nothing is enforced yet, so
+    // both diners see the same thing. The contrast is the AFTER beat's payoff —
+    // promising it now would spend it on a moment that cannot deliver.
+    io.pane({ type: "banner", pane: "nino",
+      note: "The strip above says you are John. The booking below is Maria's.",
       verify: ["Maria's booking opens for John — her name, her party size, her time",
-               "Nothing stopped him: that is exactly the problem this lab fixes"],
-      url: `http://localhost:3001/auth/signin?email=john@nino.com&name=John`, goLabel: "sign in as John",
-      link: { label: "Maria's reservation", url: `http://localhost:3001/reservations/${MARIA_RESI}` } });
+               "Nothing stopped him: that is exactly the problem this lab fixes"] });
   }
   await io.pause(P.runStep, curlOne("john@nino.com", MARIA_RESI ?? "<maria's id>"));
   io.pane({ type: "clear", pane: "nino" });
@@ -703,16 +728,20 @@ export async function runLab(io, opts = {}) {
       outcome(4, "Maria (staff) opens John's", r4.ok, `HTTP ${r4.status}${r4.ok ? " · reservationists see everything" : " — expected 200: is maria in the group?"}`);
     }
 
-    if (panes) {
+    if (panes && MARIA_RESI) {
+      // Both diners land on the SAME page — Maria's booking — so the only thing
+      // that changes between clicks is who is asking. That is the whole lesson,
+      // and it now costs one click instead of two sign-ins.
+      const mariaPage = `/reservations/${MARIA_RESI}`;
+      io.pane({ type: "identities", pane: "nino",
+        actors: dinerActors(mariaPage, mariaPage), active: "john", navigate: true });
       io.pane({ type: "banner", pane: "nino",
-        note: "Now watch the same three calls play out in the real UI.",
-        click: "Still signed in as John: open Maria's reservation, then his own. Then switch to Maria and open either.",
-        verify: ["As John, Maria's reservation is refused — the page says it isn't his",
-                 "As John, his OWN booking still opens normally",
-                 "As Maria (she's in reservationists), every reservation opens"],
-        link: MARIA_RESI ? { label: "Maria's reservation (as John → blocked)", url: `http://localhost:3001/reservations/${MARIA_RESI}` } : undefined,
-        link2: JOHN_RESI ? { label: "John's booking (his own → opens)", url: `http://localhost:3001/reservations/${JOHN_RESI}` } : undefined,
-        url: "http://localhost:3001/auth/signin?email=maria@nino.com&name=Maria", goLabel: "switch to Maria" });
+        note: "Same booking of Maria's, same app key — now flip who is asking.",
+        click: "Click Maria at the top of this pane, then click John again. Same page, opposite answers.",
+        verify: ["As John: refused — the page says this booking isn't his",
+                 "As Maria: it opens — she's in reservationists, so she sees everything",
+                 JOHN_RESI ? "As John, his OWN booking still opens (link below)" : null].filter(Boolean),
+        link: JOHN_RESI ? { label: "John's own booking →", url: `http://localhost:3001/reservations/${JOHN_RESI}` } : undefined });
     }
   }
 
