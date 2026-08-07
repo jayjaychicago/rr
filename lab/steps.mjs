@@ -441,13 +441,38 @@ export async function runLab(io, opts = {}) {
     markDone("install");
   }
 
-  // 8 · dev server FIRST — so the Developers page is visible with its two
-  // EMPTY widget spots before the next step fills them (the reveal is the
-  // point: you watch the widgets appear in a running app, no restart).
-  io.step("Start ResiResi's web app",
-    "Runs ResiResi's website on http://localhost:3003 in the background. Its\n" +
-    "Developers page is live but the two widget spots are still empty\n" +
-    "placeholders — the next step drops the real widgets in, live.");
+  // 8 · crown the admin BEFORE the app is ever opened. /developers demands two
+  // things (requireTenant + requireUser), so the very first thing you see is a
+  // sign-in — and that sign-in has to be as the admin, or the widgets land for
+  // the wrong person. Naming the admin first means one sign-in, done once.
+  io.step("Make yourself the admin",
+    "ResiResi's app needs a first admin — the person who manages users & groups.\n" +
+    "You hold the manager key, so you name that admin here. You'll sign in as\n" +
+    "them the moment the app opens, in the next step. Pick the email (the\n" +
+    "default is fine — just sign in with the SAME one).");
+  const defaultEmail = state.ownerEmail || "owner@nino.com";
+  const answer = (await io.ask("Admin and Email you'll sign in as", defaultEmail)).trim();
+  const OWNER = answer || defaultEmail;
+  state.ownerEmail = OWNER; saveState(state);
+  const adminArgs = ["admins", "add", OWNER, "--tenant", TENANT];
+  if (isDone("admin:" + OWNER)) {
+    skipNote();
+  } else {
+    await io.pause(P.runStep, abzDisplay(adminArgs));
+    await abz(adminArgs);
+    markDone("admin:" + OWNER);
+  }
+
+  // 9 · dev server, THEN sign in — so the Developers page is visible with its
+  // two EMPTY widget spots before the next step fills them (the reveal is the
+  // point: you watch the widgets appear in a running app, no restart). You must
+  // be signed in to see them at all, which is why that happens here and not later.
+  io.step("Start ResiResi's web app and sign in",
+    "Runs ResiResi's website on http://localhost:3003 in the background. It asks\n" +
+    "who you are before it shows anything: pick the restaurant, then sign in as\n" +
+    "the admin you just named. You land on the Developers page — where the two\n" +
+    "widget spots are still empty placeholders. The next step drops the real\n" +
+    "widgets into them, live.");
   await io.pause(P.runStep, "cd resiresi-frontend && npm run dev");
   io.startBg(NPM, ["run", "dev"], { cwd: FE, env: { ...process.env, APIBLAZE_CP_KEY: CPKEY } });
   {
@@ -456,17 +481,25 @@ export async function runLab(io, opts = {}) {
       { what: "the app" });
     p.end(green("  up ✓"));
   }
+  io.print(dim(`\n  Open  http://localhost:3003/developers  — it signs you in in two steps:\n` +
+    `    1. choose  Nino's Pizza\n` +
+    `    2. any name you like, with the email  ${OWNER}\n` +
+    `  Then you're on the Developers page.`));
   io.pane({ type: "mount", pane: "resiresi", url: "http://localhost:3003/developers",
-    note: isDone("wire2")
-      ? "ResiResi's Developers page — the two widgets are live here."
-      : "ResiResi's Developers page — note the two empty spots where the widgets will go.",
-    click: isDone("wire2") ? null : "Nothing to click yet — just look at this pane.",
+    note: "ResiResi's app is up — it asks who you are before showing anything.",
+    click: `In this pane: Sign in next to Nino's Pizza, then any name with the email ${OWNER}.`,
     verify: isDone("wire2")
-      ? ["The API keys widget and the Users & Groups widget are both on the page"]
-      : ["Two empty placeholder spots, one for each widget",
-         "This is ResiResi's OWN app — the widgets drop into it next"] });
+      ? ["You land on the Developers page",
+         "The API keys widget and the Users & Groups widget are both there"]
+      : ["You land on the Developers page",
+         "Two empty placeholder spots, one for each widget",
+         "This is ResiResi's OWN app — the widgets drop into those spots next"],
+    copy: OWNER, url: "http://localhost:3003/developers" });
+  await io.pause(P.signedIn);
+  // They confirmed they're signed in — the instruction has served its purpose.
+  io.pane({ type: "clear", pane: "resiresi" });
 
-  // 9 · wire widgets (hot-reloads into the running app)
+  // 10 · wire widgets (hot-reloads into the running app, in front of you)
   io.step("Add the two widgets to ResiResi's Developers page",
     "This edits only files inside rr/resiresi-frontend/ — nothing elsewhere on\n" +
     "your computer. It creates:\n" +
@@ -485,42 +518,11 @@ export async function runLab(io, opts = {}) {
     io.print(green("  3 files created + widgets mounted ✓"));
     markDone("wire2");
     io.pane({ type: "refresh", pane: "resiresi",
-      note: "The two widgets just appeared where the placeholders were.",
-      click: "Look at this pane — nothing to click yet.",
+      note: "The two widgets just appeared where the placeholders were — no restart, no page reload.",
       verify: ["An API keys widget, with a button to create a key",
-               "A Users & Groups widget",
+               "A Users & Groups widget, ready to use because you're the admin",
                "The app never restarted — they loaded into the running page"] });
   }
-
-  // 10 · crown the admin, then sign in as them (one step — the admin is named
-  // BEFORE the first sign-in, so the widget is ready the moment they land).
-  io.step("Make yourself the admin and sign in",
-    "ResiResi's app needs a first admin — the person who manages users & groups.\n" +
-    "You hold the manager key, so you name that admin here, then sign in as them.\n" +
-    "Pick the email (the default is fine; sign in with the SAME one).");
-  const defaultEmail = state.ownerEmail || "owner@nino.com";
-  const answer = (await io.ask("Admin and Email you'll sign in as", defaultEmail)).trim();
-  const OWNER = answer || defaultEmail;
-  state.ownerEmail = OWNER; saveState(state);
-  const adminArgs = ["admins", "add", OWNER, "--tenant", TENANT];
-  if (isDone("admin:" + OWNER)) {
-    skipNote();
-  } else {
-    await io.pause(P.runStep, abzDisplay(adminArgs));
-    await abz(adminArgs);
-    markDone("admin:" + OWNER);
-  }
-  io.print(dim(`\n  Done — now open  http://localhost:3003/developers  and sign in with any\n` +
-    `  name and the email  ${OWNER} . Both widgets appear, ready to use.`));
-  io.pane({ type: "banner", pane: "resiresi",
-    note: `Sign in here with any name and the email ${OWNER}.`,
-    click: "Use the sign-in form in this pane. Any name you like — but that exact email.",
-    verify: ["You land back on the Developers page, signed in",
-             "Both widgets now show real content instead of a sign-in prompt"],
-    copy: OWNER, url: "http://localhost:3003/developers" });
-  await io.pause(P.signedIn);
-  // They confirmed they're signed in — the instruction has served its purpose.
-  io.pane({ type: "clear", pane: "resiresi" });
 
   // 12 · BEFORE — John opens MARIA'S reservation by id. The lab first finds
   // one of Maria's seeded reservations (as Maria, so this fetch works before
@@ -559,8 +561,7 @@ export async function runLab(io, opts = {}) {
       p.end(green("  up ✓"));
     }
     io.pane({ type: "mount", pane: "nino", url: "http://localhost:3001/",
-      note: "Nino's Pizza — every reservation call here goes through your proxy.",
-      click: "Nothing to click yet — this is the storefront a diner would use.",
+      note: "Nino's Pizza — the storefront a diner would use. Every reservation call it makes goes through your proxy.",
       verify: ["The page loads real reservation data",
                "That data travelled: this page → your proxy → the tunnel → your laptop"] });
   }
@@ -627,7 +628,6 @@ export async function runLab(io, opts = {}) {
     // reservationists group EXPANDED (defaultOpenGroup) — maria visibly inside.
     io.pane({ type: "refresh", pane: "resiresi",
       note: "reservationists is open in Users & Groups — maria's in it.",
-      click: "Look at the Users & Groups widget in this pane.",
       verify: ["The reservationists group is expanded",
                "maria@nino.com appears as a member"] });
   }

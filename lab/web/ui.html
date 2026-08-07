@@ -344,8 +344,13 @@ function showCoach(name, e) {
   const verify = (e.verify || []).filter(Boolean);
   const card = document.createElement("div");
   card.className = "coachcard";
+  // Two kinds of moment, and they must not look alike: one asks you to DO
+  // something, the other only asks you to look at what just changed. Titling
+  // both "Your turn" and padding the second with a fake instruction ("nothing to
+  // click yet") made the callout read as wrong on a pane full of buttons.
+  const title = e.click ? "👉 Your turn, in this pane" : "👀 Look at this pane";
   card.innerHTML =
-    `<div class="ct">👉 Your turn, in this pane<button class="x" title="dismiss">✕</button></div>` +
+    `<div class="ct">${title}<button class="x" title="dismiss">✕</button></div>` +
     (e.note ? `<div class="cnote">${esc(e.note)}</div>` : "") +
     (e.click ? `<div class="cclick">${esc(e.click)}</div>` : "") +
     (verify.length

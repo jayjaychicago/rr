@@ -80,10 +80,11 @@ runs it:
    at your local API, with identity + IAM turned on.
 3. Opens the localhost tunnel and proves the proxy reaches your machine.
 4. Mints the control-plane widget key.
-5. Installs the platform app and starts it — its Developers page is live with
-   two **empty placeholder spots** — then **wires the two widgets** into the
-   running app, so you watch them appear where the placeholders were.
-6. Crowns you the first tenant admin and has you sign in.
+5. Crowns you the first tenant admin.
+6. Installs the platform app and starts it. You sign in as that admin, landing
+   on a Developers page with two **empty placeholder spots** — then it **wires
+   the two widgets** into the running app, so you watch them appear where the
+   placeholders were, ready to use.
 7. Walks the before/after: John (a diner) can open Maria's reservation → you put
    staff in a group and turn one plain-English sentence into enforced rules
    (`npx apiblaze rule "…" --enforce`) → John's own booking still opens, Maria's
