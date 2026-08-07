@@ -37,16 +37,30 @@ export default async function ReservationsPage({
   requireUser();
   const status = searchParams.status;
 
-  const [reservations, tables] = await Promise.all([
-    listReservations(restaurant.id, { status }),
+  // `tables` already tolerated a failure; the reservation list did not, so a
+  // stopped backend rendered Next's red overlay instead of this page. In dev —
+  // which is how the guided lab runs these apps — that overlay is shown INSTEAD
+  // of app/error.tsx, so the page itself has to stay standing.
+  let reservations: Reservation[] = [];
+  let unreachable = false;
+  const [listed, tables] = await Promise.all([
+    listReservations(restaurant.id, { status }).catch(() => { unreachable = true; return [] as Reservation[]; }),
     listTables(restaurant.id).catch(() => []),
   ]);
+  reservations = listed;
 
   const tableLabel = (id: string | null) =>
     id ? tables.find((t) => t.id === id)?.label ?? "—" : "—";
 
   return (
     <div className="space-y-8">
+      {unreachable && (
+        <div className="card border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <strong>Couldn’t load reservations.</strong> The backend didn’t answer — if
+          you’re running the guided lab, check that its backend step is still going.
+        </div>
+      )}
+
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{restaurant.name}</h1>
         <p className="mt-1 text-sm text-slate-500">

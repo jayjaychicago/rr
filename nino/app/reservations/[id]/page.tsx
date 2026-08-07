@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUser, getDinerId } from "@/lib/session";
 import { getReservation, type Reservation } from "@/lib/api";
+import { ApiTrouble, classifyApiError } from "@/components/ApiTrouble";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Reservation" };
@@ -22,13 +23,17 @@ export default async function ReservationDetailPage({
   let reservation: Reservation | null = null;
   let denied = false;
   let missing = false;
+  // Everything else — a dropped tunnel, a 502 with an HTML body, the backend
+  // stopped — used to rethrow, which in `npm run dev` is Next's red overlay
+  // rather than app/error.tsx. Nothing thrown means nothing ugly rendered.
+  let broken = false;
   try {
     reservation = await getReservation(params.id, getDinerId(user));
   } catch (e) {
-    const status = (e as { status?: number }).status;
-    if (status === 401 || status === 403) denied = true;
-    else if (status === 404) missing = true;
-    else throw e;
+    const kind = classifyApiError(e);
+    denied = kind === "denied";
+    missing = kind === "missing";
+    broken = kind === "unavailable";
   }
 
   return (
@@ -52,6 +57,8 @@ export default async function ReservationDetailPage({
           </p>
         </div>
       )}
+
+      {broken && <ApiTrouble kind="unavailable" />}
 
       {missing && (
         <div className="rounded-2xl bg-white p-10 text-center shadow-sm ring-1 ring-stone-100">

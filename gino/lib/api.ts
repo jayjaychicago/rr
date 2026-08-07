@@ -68,7 +68,10 @@ async function apiFetch(
     headers: { "Content-Type": "application/json", ...authHeaders, ...customHeaders, ...identityHeaders, ...init?.headers },
     cache: "no-store",
   });
-  const body = await res.json();
+  // Never assume JSON: a gateway refusal or a dropped tunnel can answer with
+  // HTML or nothing at all, and parsing that first would throw an error with no
+  // .status — which callers checking for 403 would rethrow as a hard crash.
+  const body = await res.json().catch(() => ({} as Record<string, never>));
   if (!res.ok)
     throw Object.assign(new Error(body.error?.message ?? "API error"), {
       status: res.status,

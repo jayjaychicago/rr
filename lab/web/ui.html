@@ -125,7 +125,9 @@
     text-overflow: ellipsis; white-space: nowrap; flex: 1; }
   .pane .bar a { color: var(--accent2); text-decoration: none; font-size: 11px; white-space: nowrap; }
   .pane .bar button { background: none; border: 1px solid var(--edge); color: var(--dim);
-    border-radius: 6px; font-size: 11px; cursor: pointer; padding: 1px 8px; }
+    border-radius: 6px; font-size: 11px; cursor: pointer; padding: 1px 8px; white-space: nowrap; }
+  .pane .bar button.track { border-color: var(--accent); color: var(--accent2); }
+  .pane .bar button.track:hover { background: rgba(139,92,246,.18); }
   /* ── identity strip: WHO the pane is acting as ── */
   .pane .who { display: none; grid-row: 2; align-items: center; gap: 8px; padding: 7px 10px;
     background: #16121f; border-bottom: 1px solid var(--edge); overflow-x: auto; }
@@ -210,7 +212,8 @@
 
   <div class="pane" id="pane-resiresi">
     <div class="bar"><span class="t">ResiResi · Developers</span><span class="u"></span>
-      <button onclick="reloadPane('resiresi')">↻</button><a target="_blank" href="#" class="ext" style="display:none">open in tab ↗</a></div>
+      <button class="track" onclick="backOnTrack('resiresi')" title="Return this pane to where the lab expects it">↺ back on track</button>
+      <button onclick="reloadPane('resiresi')" title="Reload">↻</button><a target="_blank" href="#" class="ext" style="display:none">open in tab ↗</a></div>
     <div class="who"></div>
     <div class="body">
       <div class="content"><div class="placeholder"><div class="big">🧩</div>
@@ -221,7 +224,8 @@
 
   <div class="pane" id="pane-nino">
     <div class="bar"><span class="t">Nino's Pizza · storefront</span><span class="u"></span>
-      <button onclick="reloadPane('nino')">↻</button><a target="_blank" href="#" class="ext" style="display:none">open in tab ↗</a></div>
+      <button class="track" onclick="backOnTrack('nino')" title="Return this pane to where the lab expects it">↺ back on track</button>
+      <button onclick="reloadPane('nino')" title="Reload">↻</button><a target="_blank" href="#" class="ext" style="display:none">open in tab ↗</a></div>
     <div class="who"></div>
     <div class="body">
       <div class="content"><div class="placeholder"><div class="big">🍕</div>
@@ -335,11 +339,20 @@ function mountPane(name, url) {
   const content = $(".content", pane);
   if (!paneState[name] || paneState[name].url !== url) {
     content.innerHTML = `<iframe src="${url}"></iframe>`;
-    paneState[name] = { url };
   }
+  // `home` is where the LAB put this pane. Clicking around the app moves the
+  // iframe but not this, so there is always one click back to the story — the
+  // apps are real, with real links, and wandering off is expected.
+  paneState[name] = { url, home: url };
   $(".bar .u", pane).textContent = url;
   const ext = $(".bar .ext", pane); ext.href = url; ext.style.display = "";
   glow(name);
+}
+/** Put the pane back where the lab expects it, as whoever it is acting as. */
+function backOnTrack(name) {
+  const home = (paneState[name] || {}).home;
+  if (home) navPane(name, home);
+  else reloadPane(name);
 }
 function reloadPane(name) {
   const f = $("#pane-" + name + " iframe");
@@ -408,6 +421,7 @@ function switchActor(name, key) {
   const actor = st.actors.find((a) => a.key === key);
   if (!actor) return;
   st.active = key;
+  if (paneState[name]) paneState[name].home = actor.url;
   for (const b of document.querySelectorAll("#pane-" + name + " .actor")) b.classList.remove("on");
   const idx = st.actors.indexOf(actor);
   const btns = document.querySelectorAll("#pane-" + name + " .actor");
