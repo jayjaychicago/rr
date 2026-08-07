@@ -3,13 +3,18 @@ import Link from "next/link";
 import { useState } from "react";
 
 export function Nav({
-  signedIn,
+  who,
   signOutAction,
 }: {
-  signedIn: boolean;
+  who: string | null;
   signOutAction: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const signedIn = !!who;
+  // "My reservations" is ambiguous the moment you can change person in one
+  // click — which is exactly what the guided lab has you do. Say the name.
+  const first = (who ?? "").trim().split(/\s+/)[0] || who;
+  const mine = signedIn ? `${first}\u2019s Reservations` : "My Reservations";
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 shadow-sm backdrop-blur">
@@ -24,8 +29,11 @@ export function Nav({
           <Link href="/#contact" className="text-sm font-medium text-stone-600 hover:text-brand-700 transition">Contact</Link>
           {signedIn && (
             <>
-              <Link href="/reservations/my" className="text-sm font-medium text-stone-600 hover:text-brand-700 transition">My Reservations</Link>
+              <Link href="/reservations/my" className="text-sm font-medium text-stone-600 hover:text-brand-700 transition">{mine}</Link>
               <Link href="/profile" className="text-sm font-medium text-stone-600 hover:text-brand-700 transition">Profile</Link>
+              <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-800 ring-1 ring-brand-100">
+                signed in as {who}
+              </span>
               <form action={signOutAction}>
                 <button type="submit" className="btn-outline text-xs px-4 py-2">Sign out</button>
               </form>
@@ -47,7 +55,7 @@ export function Nav({
           <Link href="/#contact" className="block py-2 text-sm font-medium" onClick={() => setOpen(false)}>Contact</Link>
           {signedIn && (
             <>
-              <Link href="/reservations/my" className="block py-2 text-sm font-medium" onClick={() => setOpen(false)}>My Reservations</Link>
+              <Link href="/reservations/my" className="block py-2 text-sm font-medium" onClick={() => setOpen(false)}>{mine}</Link>
               <Link href="/profile" className="block py-2 text-sm font-medium" onClick={() => setOpen(false)}>Profile</Link>
               <form action={signOutAction}>
                 <button type="submit" className="block py-2 text-sm font-medium text-brand-700">Sign out</button>

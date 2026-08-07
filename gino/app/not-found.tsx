@@ -10,7 +10,7 @@ export default function NotFound() {
         The link may be stale, or the booking it pointed at may have been removed.
       </p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-        <Link href="/reservations/my" className="btn-outline">My reservations</Link>
+        <Link href="/reservations/my" className="btn-outline">Your reservations</Link>
         <Link href="/" className="btn-primary">Start over</Link>
       </div>
     </div>

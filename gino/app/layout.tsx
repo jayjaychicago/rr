@@ -24,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="flex min-h-screen flex-col">
         <Providers>
-          <Nav signedIn={!!getUser()} signOutAction={signOutUser} />
+          <Nav who={getUser()?.name ?? null} signOutAction={signOutUser} />
           <main className="flex-1">{children}</main>
           <Footer />
         </Providers>

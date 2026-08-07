@@ -178,24 +178,44 @@ export async function runLab(io, opts = {}) {
   // IS the diner's id) with nothing gained — every one of these names is already
   // written into the seeded data and the rules you'll author.
   const OWNER = "owner@nino.com";
+  // NOT `NINO` — that name is already the nino/ DIRECTORY at module scope, and
+  // shadowing it here broke writing the storefront's .env.local.
+  const NINO_OWNER = { email: OWNER, name: "Nino" };
+  // Bob is deliberately NOT made an admin. He is the second half of the
+  // Developers-page lesson: any signed-in engineer can issue themselves a key,
+  // but managing users and groups is the admin's alone — and the widget says so
+  // itself rather than the lab having to claim it.
+  const BOB = { email: "bob@nino.com", name: "Bob" };
   const JOHN = { email: "john@nino.com", name: "John" };
   const MARIA = { email: "maria@nino.com", name: "Maria" };
   // One click = signed in. Each app exposes a demo identity route that sets its
   // session cookie and lands on the page, so the panes never make you fill a
   // sign-in form (see each app's app/api/dev-identity/route.ts).
-  const asOwner = (next = "/developers") =>
-    `http://localhost:3003/api/dev-identity?restaurant=nino&email=${encodeURIComponent(OWNER)}` +
-    `&name=Nino&next=${encodeURIComponent(next)}`;
+  const asPlatform = (who, next = "/developers") =>
+    `http://localhost:3003/api/dev-identity?restaurant=nino&email=${encodeURIComponent(who.email)}` +
+    `&name=${encodeURIComponent(who.name)}&next=${encodeURIComponent(next)}`;
+  const asOwner = (next = "/developers") => asPlatform(NINO_OWNER, next);
   const asDiner = (who, next = "/reservations") =>
     `http://localhost:3001/api/dev-identity?email=${encodeURIComponent(who.email)}` +
     `&name=${encodeURIComponent(who.name)}&next=${encodeURIComponent(next)}`;
-  const ownerActors = () => ([{ key: "owner", name: "Nino", role: "Owner", sub: OWNER,
-    initials: "N", color: "#8b5cf6", url: asOwner() }]);
-  const dinerActors = (johnNext, mariaNext) => ([
+  // The platform side: the admin, and an engineer who is not one.
+  const platformActors = (next = "/developers") => ([
+    { key: "owner", name: "Nino", role: "Owner · admin", sub: OWNER,
+      initials: "N", color: "#8b5cf6", url: asPlatform(NINO_OWNER, next) },
+    { key: "bob", name: "Bob", role: "Nino SWE", sub: BOB.email,
+      initials: "B", color: "#14b8a6", url: asPlatform(BOB, next) },
+  ]);
+  // The storefront side: a diner, a reservationist, and the owner. Nino appears
+  // here too because the person who runs the restaurant is also someone who
+  // looks at its bookings — and he sees them the same way Maria does, through
+  // group membership, not through owning the place.
+  const dinerActors = (johnNext, mariaNext, ninoNext = mariaNext) => ([
     { key: "john", name: "John", role: "Diner", sub: JOHN.email,
       initials: "J", color: "#0ea5e9", url: asDiner(JOHN, johnNext) },
     { key: "maria", name: "Maria", role: "Staff", sub: MARIA.email,
       initials: "M", color: "#f59e0b", url: asDiner(MARIA, mariaNext) },
+    { key: "nino", name: "Nino", role: "Owner", sub: NINO_OWNER.email,
+      initials: "N", color: "#8b5cf6", url: asDiner(NINO_OWNER, ninoNext) },
   ]);
 
   const abz = (args, o) => io.run(CLI.cmd, [...CLI.pre, ...args], o);
@@ -505,9 +525,10 @@ export async function runLab(io, opts = {}) {
   io.print(dim(`\n  Open this and you are signed in as ${OWNER}, on the Developers page:\n`) +
     green(`    ${asOwner()}`));
   io.pane({ type: "mount", pane: "resiresi", url: asOwner() });
-  io.pane({ type: "identities", pane: "resiresi", actors: ownerActors(), active: "owner" });
+  io.pane({ type: "identities", pane: "resiresi", actors: platformActors(), active: "owner" });
   io.pane({ type: "banner", pane: "resiresi",
-    note: "ResiResi's Developers page, signed in as Nino's owner.",
+    note: "ResiResi's Developers page. The strip above shows who you are: Nino, the admin.",
+    click: `Bob is here too — an engineer at Nino's who is NOT an admin. Worth a click once the widgets are in.`,
     verify: isDone("wire2")
       ? ["The API keys widget and the Users & Groups widget are both there"]
       : ["Two empty placeholder spots, one for each widget",
@@ -535,9 +556,12 @@ export async function runLab(io, opts = {}) {
     markDone("wire2");
     io.pane({ type: "refresh", pane: "resiresi",
       note: "The two widgets just appeared where the placeholders were — no restart, no page reload.",
+      click: "Now click Bob in the strip above, then click Nino again. Same page, different powers.",
       verify: ["An API keys widget, with a button to create a key",
-               "A Users & Groups widget, ready to use because you're the admin",
-               "The app never restarted — they loaded into the running page"] });
+               "A Users & Groups widget, usable because Nino is the admin",
+               "As Bob: he can still issue himself an API key…",
+               "…but Users & Groups tells him he isn't an admin — you never wrote that check",
+               "The app never restarted — the widgets loaded into the running page"] });
   }
 
   // 12 · BEFORE — John opens MARIA'S reservation by id. The lab first finds
@@ -580,7 +604,7 @@ export async function runLab(io, opts = {}) {
     io.pane({ type: "identities", pane: "nino", actors: dinerActors("/", "/"), active: "john" });
     io.pane({ type: "banner", pane: "nino",
       note: "Nino's Pizza — the storefront a diner would use. Every reservation call it makes goes through your proxy.",
-      click: "Try the two diners at the top of this pane — one click switches who you are.",
+      click: "Three people sit at the top of this pane — John a diner, Maria staff, Nino the owner. One click switches who you are.",
       verify: ["The page loads real reservation data",
                "That data travelled: this page → your proxy → the tunnel → your laptop"] });
   }
@@ -621,13 +645,16 @@ export async function runLab(io, opts = {}) {
   // 13 · make the group — user's choice: click it in the widget, or let the
   // lab run the equivalent CLI commands (same result either way).
   io.step("Put staff in a group",
-    "Goal: a group called  " + bold("reservationists") + "  with  " + bold("maria@nino.com") + "  in it\n" +
-    "(she's staff; John stays just a diner). Two ways to do it — pick one:\n\n" +
-    "  " + bold(P.widgetLabel) + "  — in Users & Groups: + New user → maria@nino.com,\n" +
-    "              + New group → reservationists, then add maria as a member.\n" +
+    "Goal: a group called  " + bold("reservationists") + "  holding the two people who\n" +
+    "work here — " + bold("maria@nino.com") + " and " + bold(OWNER) + " (Nino himself).\n" +
+    "John stays just a diner. Note that Nino gets in the same way Maria does:\n" +
+    "by being IN the group. Owning the restaurant is not a permission.\n\n" +
+    "  " + bold(P.widgetLabel) + "  — in Users & Groups: + New group → reservationists,\n" +
+    "              then add maria@nino.com and " + OWNER + " to it.\n" +
     "  " + bold(P.terminalLabel) + " — the lab runs these for you:\n" +
     green(`      npx apiblaze group create reservationists --admin ${OWNER} --tenant ${TENANT}\n` +
-    `      npx apiblaze group add-user maria@nino.com reservationists --tenant ${TENANT}`));
+    `      npx apiblaze group add-user maria@nino.com reservationists --tenant ${TENANT}\n` +
+    `      npx apiblaze group add-user ${OWNER} reservationists --tenant ${TENANT}`));
   if (isDone("group")) {
     skipNote();
   } else {
@@ -635,26 +662,29 @@ export async function runLab(io, opts = {}) {
       [{ key: "w", label: "Widget" }, { key: "t", label: "Terminal" }], "t");
     if (String(how).toLowerCase().startsWith("w")) {
       io.pane({ type: "banner", pane: "resiresi",
-        note: "Build the group in the Users & Groups widget.",
-        click: "In this pane: + New user → maria@nino.com, then + New group → reservationists, then add maria to it.",
+        note: "Build the group in the Users & Groups widget. (You are Nino — the admin — so it lets you.)",
+        click: `In this pane: + New group → reservationists, then add maria@nino.com and ${OWNER} to it.`,
         verify: ["A group named reservationists exists",
-                 "maria@nino.com is listed inside it (John is not)"],
+                 `maria@nino.com and ${OWNER} are both inside it`,
+                 "John is not — he is a diner, not staff"],
         copy: "maria@nino.com" });
       await io.pause(P.widgetDone);
       io.pane({ type: "clear", pane: "resiresi" });
     } else {
       await abz(["group", "create", "reservationists", "--admin", OWNER, "--tenant", TENANT]);
       await abz(["group", "add-user", "maria@nino.com", "reservationists", "--tenant", TENANT]);
-      io.print(green("  reservationists ✓ (maria@nino.com is a member)"));
+      await abz(["group", "add-user", OWNER, "reservationists", "--tenant", TENANT]);
+      io.print(green(`  reservationists ✓ (maria@nino.com and ${OWNER} are members)`));
       io.print(dim("  Refresh the Users & Groups widget to see it there too."));
     }
     markDone("group");
     // Reload the Developers pane either way: the widget lands with the fresh
     // reservationists group EXPANDED (defaultOpenGroup) — maria visibly inside.
     io.pane({ type: "refresh", pane: "resiresi",
-      note: "reservationists is open in Users & Groups — maria's in it.",
+      note: "reservationists is open in Users & Groups — Maria and Nino are in it.",
       verify: ["The reservationists group is expanded",
-               "maria@nino.com appears as a member"] });
+               "maria@nino.com and " + OWNER + " are both members",
+               "John is not in it — that is what will separate them next"] });
   }
 
   // 14 · one-shot rule (plain English → enforced authorization)
@@ -729,18 +759,25 @@ export async function runLab(io, opts = {}) {
     }
 
     if (panes && MARIA_RESI) {
-      // Both diners land on the SAME page — Maria's booking — so the only thing
-      // that changes between clicks is who is asking. That is the whole lesson,
-      // and it now costs one click instead of two sign-ins.
+      // The finale, and the reason the storefront pane has been parked on this
+      // exact page since the BEFORE beat: it is still showing Maria's booking,
+      // opened by John — the 200 he should never have had. Reload that page, as
+      // that same person, now that the rule is live, and the refusal replaces
+      // the booking in front of you. Nothing about the request changed; only the
+      // rule now exists. Both diners point at the page so the follow-up — the
+      // same URL opening for staff — is one more click.
       const mariaPage = `/reservations/${MARIA_RESI}`;
+      io.print(dim("\n  Reloading John's view of Maria's booking in the storefront pane…"));
       io.pane({ type: "identities", pane: "nino",
         actors: dinerActors(mariaPage, mariaPage), active: "john", navigate: true });
       io.pane({ type: "banner", pane: "nino",
-        note: "Same booking of Maria's, same app key — now flip who is asking.",
-        click: "Click Maria at the top of this pane, then click John again. Same page, opposite answers.",
+        note: "That is the page John was reading a minute ago, reloaded. He has just lost access.",
+        click: "Now click Maria, then Nino, then John again — the same page, three different answers.",
         verify: ["As John: refused — the page says this booking isn't his",
-                 "As Maria: it opens — she's in reservationists, so she sees everything",
-                 JOHN_RESI ? "As John, his OWN booking still opens (link below)" : null].filter(Boolean),
+                 "As Maria: it opens — she's in reservationists",
+                 "As Nino: it opens too — because he's in that group, not because he owns the place",
+                 "Same URL, same app key, same booking. Only the person differs.",
+                 JOHN_RESI ? "John's OWN booking still opens (link below)" : null].filter(Boolean),
         link: JOHN_RESI ? { label: "John's own booking →", url: `http://localhost:3001/reservations/${JOHN_RESI}` } : undefined });
     }
   }

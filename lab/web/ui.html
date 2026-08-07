@@ -358,9 +358,17 @@ function reloadPane(name) {
   const f = $("#pane-" + name + " iframe");
   if (f) f.src = f.src;
 }
+// Re-navigating to the SAME url has to actually re-fetch: the lab's closing
+// move is reloading the page John already has open, so the refusal replaces the
+// booking in front of you. An iframe cannot be told to reload from here (it is
+// a different origin, so contentWindow is off limits), and assigning an
+// identical src is not reliably a navigation — so make the url differ.
+let navSeq = 0;
+const bust = (url) => url + (url.includes("?") ? "&" : "?") + "_r=" + ++navSeq;
 function navPane(name, url) {
   const f = $("#pane-" + name + " iframe");
-  if (f) f.src = url; else mountPane(name, url);
+  if (f) f.src = f.src === url ? bust(url) : url;
+  else mountPane(name, url);
   glow(name);
 }
 function glow(name) {

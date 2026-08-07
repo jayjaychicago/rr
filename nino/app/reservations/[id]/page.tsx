@@ -40,7 +40,7 @@ export default async function ReservationDetailPage({
     <div className="mx-auto max-w-xl px-4 py-16">
       <p className="mb-6 text-sm">
         <Link href="/reservations/my" className="text-stone-500 hover:text-stone-800">
-          ← My reservations
+          ← {user.name.trim().split(/\s+/)[0] || user.name}’s reservations
         </Link>
       </p>
 
