@@ -338,6 +338,46 @@ function logInto(card, html) {
   return log;
 }
 
+// ── copy ─────────────────────────────────────────────────────────────────────
+// navigator.clipboard exists ONLY in a secure context — https or localhost. Open
+// this lab over plain http on a hostname (a box on your network, a tunnel
+// without TLS) and it is simply undefined, so every copy button threw and did
+// nothing while still claiming "copied ✓". Try the modern API, fall back to the
+// old execCommand path that works anywhere, and only claim success if one of
+// them actually worked. If neither does, say so — a button that lies is worse
+// than one that admits it cannot.
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* fall through to the legacy path */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    // Off-screen but focusable, and readOnly so mobile keyboards stay down.
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:-1000px;left:-1000px;opacity:0";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+/** Wire a button to copy, reporting what actually happened. */
+function wireCopy(btn, getText, label = "copy") {
+  btn.onclick = async () => {
+    const ok = await copyText(getText());
+    btn.textContent = ok ? "copied \u2713" : "press \u2318/Ctrl+C";
+    setTimeout(() => { btn.textContent = label; }, ok ? 1500 : 2500);
+  };
+}
+
 async function send(id, value) {
   await fetch("/action", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, value }) });
@@ -480,7 +520,7 @@ function showCoach(name, e) {
   if (e.copy) {
     const b = document.createElement("button");
     b.textContent = "copy " + e.copy;
-    b.onclick = () => { navigator.clipboard.writeText(e.copy); b.textContent = "copied ✓"; };
+    wireCopy(b, () => e.copy, "copy " + e.copy);
     slots.appendChild(b);
   }
   for (const l of [e.url ? { label: (e.goLabel || "go") + " →", url: e.url } : null, e.link, e.link2].filter(Boolean)) {
@@ -527,7 +567,7 @@ function paintPrompt(id) {
   if (ta && keep) ta.value = keep;
 
   const copyBtn = $(".copy", wrap);
-  if (copyBtn) copyBtn.onclick = () => { navigator.clipboard.writeText(e.cmd); copyBtn.textContent = "copied ✓"; };
+  if (copyBtn) wireCopy(copyBtn, () => e.cmd);
   const actions = $(".actions", wrap);
 
   if (e.kind === "pause") {
@@ -601,7 +641,7 @@ const handlers = {
       `<code>/proxy/&lt;port&gt;/</code> can’t serve these apps: Next asks for its assets at an ` +
       `absolute <code>/_next/…</code> path, which lands outside the prefix.</p>`;
     const c = box.querySelector(".copy");
-    if (c) c.onclick = () => { navigator.clipboard.writeText(ssh); c.textContent = "copied ✓"; };
+    if (c) wireCopy(c, () => ssh);
     box.classList.add("show");
   },
   step(e) {
