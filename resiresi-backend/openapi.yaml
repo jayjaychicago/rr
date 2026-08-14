@@ -9,10 +9,8 @@ info:
 
     '
 servers:
-- url: https://backend.resiresi.com/v1
+- url: https://study.apiblaze.com
   description: Production
-- url: http://localhost:8080/v1
-  description: Local development
 components:
   schemas:
     Error:

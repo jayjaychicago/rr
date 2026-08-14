@@ -9,11 +9,7 @@ info:
 
     '
 servers:
-- url: http://localhost:8080
-  description: Development
-- url: http://localhost:8080
-  description: Test
-- url: http://localhost:8080
+- url: https://study.apiblaze.com
   description: Production
 components:
   schemas:
