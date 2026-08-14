@@ -123,6 +123,25 @@ const server = createServer(async (req, res) => {
   const m = req.method;
 
   // system
+  // Opening the bare port is the first thing anyone does when checking whether
+  // this is alive — and it used to answer with a flat "Route not found.", which
+  // reads like a fault rather than "you are at the API, but that is not a route
+  // it has". Point at what is actually here instead.
+  if (path === "/") {
+    return ok(res, {
+      service: "resiresi reservations API",
+      status: "ok",
+      note: "This is the API the guided lab puts a gateway in front of — not the lab itself, which serves on port 3333.",
+      routes: {
+        health: "/healthz",
+        spec: "/openapi.yaml",
+        docs: "/docs",
+        restaurants: "/v1/restaurants",
+        reservations: "/v1/restaurants/{restaurant}/reservations",
+        reservation: "/v1/restaurants/{restaurant}/reservations/{id}",
+      },
+    });
+  }
   if (path === "/healthz") return ok(res, { status: "ok", db: "ok" });
   if (path === "/openapi.yaml") {
     try { return ok(res, readFileSync(join(HERE, "openapi.yaml"), "utf8"), { "Content-Type": "application/yaml" }); }
