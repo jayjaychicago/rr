@@ -385,7 +385,26 @@ async function send(id, value) {
 
 // ── panes ────────────────────────────────────────────────────────────────────
 const paneState = {};
+// Pane urls arrive as http://localhost:PORT/… because that is what they are on
+// the machine running the lab. When this page is being viewed from somewhere
+// else, the same ports on THIS hostname are almost certainly the right address —
+// so point there instead of at the viewer's own computer, where nothing is
+// listening. Requires those ports to be open, which is the common case for
+// anyone who exposed 3333 to reach this page at all.
+//
+// Only when the page itself is http: over https there is no honest rewrite —
+// http frames are blocked as mixed content, and https would need TLS the apps
+// do not have. There the banner explains the two ways out instead.
+const CAN_LOCALIZE = !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)
+  && location.protocol === "http:";
+function localize(u) {
+  if (!CAN_LOCALIZE || typeof u !== "string") return u;
+  return u.replace(/^http:\/\/(?:localhost|127\.0\.0\.1)(:\d+)?/i,
+    "http://" + location.hostname + "$1");
+}
+
 function mountPane(name, url) {
+  url = localize(url);
   const pane = document.getElementById("pane-" + name);
   const content = $(".content", pane);
   if (!paneState[name] || paneState[name].url !== url) {
@@ -417,6 +436,7 @@ function reloadPane(name) {
 let navSeq = 0;
 const bust = (url) => url + (url.includes("?") ? "&" : "?") + "_r=" + ++navSeq;
 function navPane(name, url) {
+  url = localize(url);
   const f = $("#pane-" + name + " iframe");
   if (f) f.src = f.src === url ? bust(url) : url;
   else mountPane(name, url);
@@ -627,19 +647,27 @@ const handlers = {
     const host = location.hostname;
     const ssh = `ssh -L 3333:localhost:3333 -L 3003:localhost:3003 -L 3001:localhost:3001 ${host}`;
     const box = document.getElementById("remote");
-    box.innerHTML =
-      `<b>⚠ The two panes point at your own computer.</b> You are viewing this from ` +
-      `<code>${esc(host)}</code>, but the lab is serving the apps on <code>localhost:3003</code> and ` +
-      `<code>localhost:3001</code> — which, in your browser, means this machine, not the one running ` +
-      `the lab. The steps still work; the panes will stay blank. Two ways to fix it:` +
-      `<ol><li><b>Forward the ports</b> (nothing to configure, keeps everything on localhost):` +
-      `<div class="cmd" style="margin-top:6px">${esc(ssh)}<button class="copy">copy</button></div>` +
-      `then open <code>http://localhost:3333</code> instead.</li>` +
-      `<li><b>Or open 3001/3003 on the host</b> and relaunch with ` +
-      `<code>LAB_APP_BASE='http://${esc(host)}:{port}' ./launch.sh</code></li></ol>` +
-      `<p style="margin:8px 0 0;opacity:.85">A path-prefix proxy such as code-server's ` +
-      `<code>/proxy/&lt;port&gt;/</code> can’t serve these apps: Next asks for its assets at an ` +
-      `absolute <code>/_next/…</code> path, which lands outside the prefix.</p>`;
+    if (CAN_LOCALIZE) {
+      // We already repointed the panes at this hostname. Say so — if they stay
+      // blank the cause is specific (those ports are not open) and worth naming,
+      // because it looks identical to "the lab is broken".
+      box.innerHTML =
+        `<b>Viewing from ${esc(host)}.</b> The two panes have been pointed at ` +
+        `<code>${esc(host)}:3003</code> and <code>${esc(host)}:3001</code> instead of localhost. ` +
+        `If they stay blank, those two ports aren\u2019t open on that machine — open them, or forward ` +
+        `everything over ssh and use <code>http://localhost:3333</code>:` +
+        `<div class="cmd" style="margin-top:6px">${esc(ssh)}<button class="copy">copy</button></div>`;
+    } else {
+      box.innerHTML =
+        `<b>\u26a0 The two panes point at your own computer.</b> You are viewing this over ` +
+        `<code>${esc(location.protocol)}</code> from <code>${esc(host)}</code>, and the apps are ` +
+        `served on plain http, so the panes can\u2019t be repointed for you \u2014 an http frame in an ` +
+        `https page is blocked, and the apps have no TLS. Two ways round it:` +
+        `<ol><li><b>Forward the ports</b> and use <code>http://localhost:3333</code>:` +
+        `<div class="cmd" style="margin-top:6px">${esc(ssh)}<button class="copy">copy</button></div></li>` +
+        `<li><b>Or open 3001/3003/3333</b> and load the lab at ` +
+        `<code>http://${esc(host)}:3333</code> \u2014 the panes then follow that hostname by themselves.</li></ol>`;
+    }
     const c = box.querySelector(".copy");
     if (c) wireCopy(c, () => ssh);
     box.classList.add("show");
