@@ -9,17 +9,18 @@ info:
 
     '
 servers:
-# The lab creates the proxy FROM this spec, so these servers become its upstream
-# target — and the upstream is the backend running on the lab machine. Loopback
-# is deliberately allowed for exactly this case; `apiblaze dev` then tunnels the
-# public proxy address to it. An apiblaze.com host here is refused on purpose: a
-# proxy pointed at an apiblaze address forwards to itself.
-- url: http://localhost:8080
-  description: Development
-- url: http://localhost:8080
-  description: Test
-- url: http://localhost:8080
-  description: Production
+# A proxy created from this spec targets whatever is here — and ONE entry sets
+# dev, test and prod alike (the parser fans a single server across all three).
+#
+# This points at the study box's public address so a proxy works the moment it
+# is created, with no tunnel step. Two things that has to be true:
+#   • port 8080 open on that host — otherwise the proxy reaches nothing;
+#   • the address stays put — an EC2 public IP changes on stop/start unless it
+#     is an Elastic IP, and this file would then be pointing at someone else.
+# Running the guided lab instead? Use http://localhost:8080 — `apiblaze dev`
+# tunnels to it, and nothing needs to be exposed.
+- url: http://54.198.198.29:8080
+  description: Study box (public, no tunnel needed)
 components:
   schemas:
     Error:
