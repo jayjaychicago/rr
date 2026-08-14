@@ -28,6 +28,34 @@ Switch at any point; it applies from the next command on. Either way the panes
 on the right behave the same, and the lab still makes its own check calls so it
 can show you the results.
 
+### Running it on a remote box
+
+The lab assumes the browser and the apps are on the same machine: the panes are
+iframes of `localhost:3003` and `localhost:3001`, and in your browser
+`localhost` means *your* computer. Open the lab from a server and the steps all
+work, but both panes stay blank. The page now says so, with the fix.
+
+**Forward the ports** — simplest, nothing to configure, everything stays on
+localhost:
+
+```
+ssh -L 3333:localhost:3333 -L 3003:localhost:3003 -L 3001:localhost:3001 you@your-box
+```
+
+then open `http://localhost:3333` on your own machine.
+
+**Or expose the ports** on the host and tell the lab where the apps are
+reachable (`{port}` is filled in):
+
+```
+LAB_APP_BASE='http://your-box.example.com:{port}' ./launch.sh
+```
+
+One thing that does *not* work: a path-prefix proxy such as code-server's
+`/proxy/<port>/`. Next asks for its assets at an absolute `/_next/…` path, which
+lands outside the prefix and 404s, so the apps come up broken. The lab's own
+port (3333) is fine through such a proxy — it is the two Next apps that aren't.
+
 Each pane also carries an **identity strip**: who that pane is acting as. The
 platform pane is always Nino's owner. The storefront pane has two diners, **John**
 and **Maria** — click either to become them. One click sets the session and

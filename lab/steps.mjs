@@ -57,6 +57,18 @@ export function spawnTarget(cmd, args) {
   return { cmd, args, shell: shim.endsWith(".cmd") || shim.endsWith(".bat") };
 }
 
+// Browser-facing app URLs. The lab's own readiness probes always talk to
+// localhost — it runs on the same machine as the apps — but THESE are the urls
+// handed to your browser, which may be somewhere else entirely (a laptop
+// pointed at a cloud box). `{port}` is filled in.
+//   • same machine, or an `ssh -L` tunnel  → leave unset (the default)
+//   • ports opened on the host             → LAB_APP_BASE='http://box.example.com:{port}'
+// A path-prefix proxy (code-server's /proxy/<port>/, say) does NOT work here:
+// Next serves its assets from an absolute /_next/... path, so under a prefix the
+// browser asks the proxy's root for them and gets nothing.
+export const APP_BASE = process.env.LAB_APP_BASE || "http://localhost:{port}";
+export const appUrl = (port, path = "") => APP_BASE.replace("{port}", String(port)) + path;
+
 // Every APIblaze call goes through npx with --yes, so npx fetches the CLI once
 // (first use) WITHOUT its interactive "Ok to proceed?" prompt, then reuses it.
 // Pinned to an exact version (not @latest) so npx installs it ONCE and then runs
@@ -192,12 +204,12 @@ export async function runLab(io, opts = {}) {
   // session cookie and lands on the page, so the panes never make you fill a
   // sign-in form (see each app's app/api/dev-identity/route.ts).
   const asPlatform = (who, next = "/developers") =>
-    `http://localhost:3003/api/dev-identity?restaurant=nino&email=${encodeURIComponent(who.email)}` +
-    `&name=${encodeURIComponent(who.name)}&next=${encodeURIComponent(next)}`;
+    appUrl(3003, `/api/dev-identity?restaurant=nino&email=${encodeURIComponent(who.email)}` +
+      `&name=${encodeURIComponent(who.name)}&next=${encodeURIComponent(next)}`);
   const asOwner = (next = "/developers") => asPlatform(NINO_OWNER, next);
   const asDiner = (who, next = "/reservations") =>
-    `http://localhost:3001/api/dev-identity?email=${encodeURIComponent(who.email)}` +
-    `&name=${encodeURIComponent(who.name)}&next=${encodeURIComponent(next)}`;
+    appUrl(3001, `/api/dev-identity?email=${encodeURIComponent(who.email)}` +
+      `&name=${encodeURIComponent(who.name)}&next=${encodeURIComponent(next)}`);
   // The platform side: the admin, and an engineer who is not one.
   const platformActors = (next = "/developers") => ([
     { key: "owner", name: "Nino", role: "Owner · admin", sub: OWNER,
@@ -778,7 +790,7 @@ export async function runLab(io, opts = {}) {
                  "As Nino: it opens too — because he's in that group, not because he owns the place",
                  "Same URL, same app key, same booking. Only the person differs.",
                  JOHN_RESI ? "John's OWN booking still opens (link below)" : null].filter(Boolean),
-        link: JOHN_RESI ? { label: "John's own booking →", url: `http://localhost:3001/reservations/${JOHN_RESI}` } : undefined });
+        link: JOHN_RESI ? { label: "John's own booking →", url: appUrl(3001, `/reservations/${JOHN_RESI}`) } : undefined });
     }
   }
 

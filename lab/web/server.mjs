@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { spawn, exec } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
-import { runLab, isWin, spawnTarget, displayCommand, ROOT } from "../steps.mjs";
+import { runLab, isWin, spawnTarget, displayCommand, ROOT, APP_BASE } from "../steps.mjs";
 
 const PORT = 3333;
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -269,6 +269,11 @@ server.listen(PORT, () => {
   exec(open, () => { /* headless is fine — the URL is printed */ });
 
   emit({ type: "mode", mode });
+  // Tell the page where the two apps live FOR A BROWSER. If it turns out the
+  // page is not being viewed on this machine and this is still the localhost
+  // default, the panes would silently point at the viewer's own computer — so
+  // the page says so rather than showing two dead frames.
+  emit({ type: "config", appBase: APP_BASE });
   runLab(io, { panes: true })
     .then(() => emit({ type: "done" }))
     .catch((e) => {

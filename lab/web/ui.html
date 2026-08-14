@@ -111,6 +111,16 @@
   }
   .seg button.on { background: var(--accent); color: #fff; }
   #mode .why { font-size: 12px; color: var(--dim); margin-top: 7px; }
+  /* ── remote-viewing warning ── */
+  #remote {
+    display: none; background: #2a2113; border: 1px solid var(--yellow); border-radius: 12px;
+    padding: 12px 14px; flex-shrink: 0; color: #f4e3bd; font-size: 13px;
+  }
+  #remote.show { display: block; }
+  #remote b { color: var(--yellow); }
+  #remote ol { margin: 8px 0 0; padding-left: 18px; }
+  #remote li { margin-bottom: 8px; }
+  #remote code { font: 11px ui-monospace, monospace; color: var(--green); word-break: break-all; }
   /* ── panes ── */
   .pane { display: grid; grid-template-rows: 34px auto 1fr; min-height: 0;
     background: var(--panel); border: 1px solid var(--edge); border-radius: 12px; overflow: hidden;
@@ -208,6 +218,7 @@
       </div>
       <div class="why" id="mode-why"></div>
     </div>
+    <div id="remote"></div>
   </div>
 
   <div class="pane" id="pane-resiresi">
@@ -566,6 +577,33 @@ function paintPrompt(id) {
 let progressLine = null;
 const handlers = {
   mode(e) { MODE = e.mode; paintMode(); },
+  // The two panes are iframes of the apps. If you are looking at this page from
+  // a DIFFERENT machine than the one running the lab, "localhost:3003" means
+  // your own computer, where nothing is listening — the panes would just sit
+  // there empty with no clue why. Say it, and say how to fix it.
+  config(e) {
+    const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    if (local || !/localhost/.test(e.appBase || "")) return;
+    const host = location.hostname;
+    const ssh = `ssh -L 3333:localhost:3333 -L 3003:localhost:3003 -L 3001:localhost:3001 ${host}`;
+    const box = document.getElementById("remote");
+    box.innerHTML =
+      `<b>⚠ The two panes point at your own computer.</b> You are viewing this from ` +
+      `<code>${esc(host)}</code>, but the lab is serving the apps on <code>localhost:3003</code> and ` +
+      `<code>localhost:3001</code> — which, in your browser, means this machine, not the one running ` +
+      `the lab. The steps still work; the panes will stay blank. Two ways to fix it:` +
+      `<ol><li><b>Forward the ports</b> (nothing to configure, keeps everything on localhost):` +
+      `<div class="cmd" style="margin-top:6px">${esc(ssh)}<button class="copy">copy</button></div>` +
+      `then open <code>http://localhost:3333</code> instead.</li>` +
+      `<li><b>Or open 3001/3003 on the host</b> and relaunch with ` +
+      `<code>LAB_APP_BASE='http://${esc(host)}:{port}' ./launch.sh</code></li></ol>` +
+      `<p style="margin:8px 0 0;opacity:.85">A path-prefix proxy such as code-server's ` +
+      `<code>/proxy/&lt;port&gt;/</code> can’t serve these apps: Next asks for its assets at an ` +
+      `absolute <code>/_next/…</code> path, which lands outside the prefix.</p>`;
+    const c = box.querySelector(".copy");
+    if (c) c.onclick = () => { navigator.clipboard.writeText(ssh); c.textContent = "copied ✓"; };
+    box.classList.add("show");
+  },
   step(e) {
     newCard(`<h3><span class="n">${e.n}</span> ${esc(e.title)}<span class="tick"></span></h3>` +
       (e.explain ? `<div class="explain">${ansi(e.explain)}</div>` : ""));
