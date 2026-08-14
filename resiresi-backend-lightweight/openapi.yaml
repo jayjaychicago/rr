@@ -9,7 +9,16 @@ info:
 
     '
 servers:
-- url: https://study.apiblaze.com
+# The lab creates the proxy FROM this spec, so these servers become its upstream
+# target — and the upstream is the backend running on the lab machine. Loopback
+# is deliberately allowed for exactly this case; `apiblaze dev` then tunnels the
+# public proxy address to it. An apiblaze.com host here is refused on purpose: a
+# proxy pointed at an apiblaze address forwards to itself.
+- url: http://localhost:8080
+  description: Development
+- url: http://localhost:8080
+  description: Test
+- url: http://localhost:8080
   description: Production
 components:
   schemas:
