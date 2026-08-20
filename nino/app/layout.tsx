@@ -5,6 +5,7 @@ import { Nav } from "@/components/Nav";
 import { Footer } from "@/components/Footer";
 import { getUser } from "@/lib/session";
 import { signOutUser } from "./auth/actions";
+import { NinoChat } from "@/components/NinoChat";
 
 export const metadata: Metadata = {
   title: { default: "NINO", template: "%s | Nino's Pizza" },
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Nav who={getUser()?.name ?? null} signOutAction={signOutUser} />
           <main className="flex-1">{children}</main>
           <Footer />
+          <NinoChat signedIn={Boolean(getUser())} />
         </Providers>
       </body>
     </html>
