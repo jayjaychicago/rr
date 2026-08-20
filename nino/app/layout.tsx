@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Nav who={getUser()?.name ?? null} signOutAction={signOutUser} />
           <main className="flex-1">{children}</main>
           <Footer />
-          <NinoChat signedIn={Boolean(getUser())} />
+          <NinoChat signedIn={Boolean(getUser())} userKey={getUser()?.email} />
         </Providers>
       </body>
     </html>

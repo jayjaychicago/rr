@@ -7,13 +7,16 @@
  */
 import { ChatWidget } from "apiblaze/react";
 
-export function NinoChat({ signedIn }: { signedIn: boolean }) {
+export function NinoChat({ signedIn, userKey }: { signedIn: boolean; userKey?: string }) {
   // No login UI in the chat, ever (widget UX rule): signed-out visitors simply
   // don't get the bubble — the site's own Sign in is the affordance.
   if (!signedIn) return null;
   return (
     <ChatWidget
       endpoint="/api/apiblaze/chat"
+      // PER-USER transcript key (widget doc): without it, diner B could read
+      // diner A's reservation chat in the same tab on a shared machine.
+      storageKey={`apiblaze-chat:nino:${userKey ?? "anon"}`}
       title="Chat with Nino"
       avatar="🍕"
       welcome="Ciao! I can check your reservations or book you a table — just ask."
