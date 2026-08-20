@@ -9,8 +9,8 @@ info:
 
     '
 servers:
-- url: http://54.198.198.29:8080
-  description: Local development
+- url: https://backend.resiresi.com/v1
+  description: ResiResiBackend
 components:
   schemas:
     Error:
