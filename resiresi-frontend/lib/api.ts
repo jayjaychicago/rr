@@ -1,11 +1,12 @@
-/** The backend the app talks to, without the version prefix. */
+/** The backend the app talks to. */
 export const API_ORIGIN =
   process.env.RESIRESI_API_URL ?? "http://localhost:8080";
 
 export const SPEC_URL = `${API_ORIGIN}/openapi.yaml`;
 export const DOCS_URL = `${API_ORIGIN}/docs`;
 
-const BASE = `${API_ORIGIN}/v1`;
+// The API is unversioned — routes hang straight off the origin.
+const BASE = API_ORIGIN;
 
 // The resiresi origin is open — no credential of its own. A key is sent only if
 // one is configured, which is what you do when pointing at an APIblaze proxy.

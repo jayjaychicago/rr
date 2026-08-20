@@ -18,7 +18,7 @@ const CreateTableSchema = z.object({
 
 const UpdateTableSchema = CreateTableSchema.partial();
 
-// GET /v1/restaurants/:restaurantId/tables
+// GET /restaurants/:restaurantId/tables
 router.get('/',
   async (req, res, next) => {
     try {
@@ -34,7 +34,7 @@ router.get('/',
   }
 );
 
-// POST /v1/restaurants/:restaurantId/tables
+// POST /restaurants/:restaurantId/tables
 router.post('/',
   validate(CreateTableSchema),
   async (req, res, next) => {
@@ -58,7 +58,7 @@ router.post('/',
   }
 );
 
-// PATCH /v1/restaurants/:restaurantId/tables/:tableId
+// PATCH /restaurants/:restaurantId/tables/:tableId
 router.patch('/:tableId',
   validate(UpdateTableSchema),
   async (req, res, next) => {
@@ -96,7 +96,7 @@ router.patch('/:tableId',
   }
 );
 
-// DELETE /v1/restaurants/:restaurantId/tables/:tableId
+// DELETE /restaurants/:restaurantId/tables/:tableId
 router.delete('/:tableId',
   async (req, res, next) => {
     try {

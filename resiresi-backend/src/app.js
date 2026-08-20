@@ -79,9 +79,9 @@ export function createApp() {
 
   // 7. routes
   app.use(systemRouter);
-  app.use('/v1/restaurants', restaurantsRouter);
-  app.use('/v1/restaurants/:restaurantId/tables', tablesRouter);
-  app.use('/v1/restaurants/:restaurantId/reservations', reservationsRouter);
+  app.use('/restaurants', restaurantsRouter);
+  app.use('/restaurants/:restaurantId/tables', tablesRouter);
+  app.use('/restaurants/:restaurantId/reservations', reservationsRouter);
 
   // 8. 404
   app.use((req, res) => {

@@ -401,11 +401,11 @@ export async function runLab(io, opts = {}) {
   // Capture the tunnel's output to a log so a failure is diagnosable instead of a
   // silent timeout (it runs headless, so its own errors would otherwise vanish).
   const tunnelLog = join(ROOT, "lab", ".tunnel.log");
-  // Reachability probe: /v1/restaurants is unprotected, so any JSON answer
+  // Reachability probe: /restaurants is unprotected, so any JSON answer
   // means gateway→tunnel→backend is alive; 502/503 tunnel errors mean it isn't.
   const tunnelAlive = async () => {
     try {
-      const r = await fetch(`${BASE}/v1/restaurants`, { headers: { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" } });
+      const r = await fetch(`${BASE}/restaurants`, { headers: { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" } });
       return r.ok;
     } catch { return false; }
   };
@@ -434,7 +434,7 @@ export async function runLab(io, opts = {}) {
 
   // 5 · smoke test
   const smokeCurl =
-    `curl "${BASE}/v1/restaurants/nino/reservations" \\\n` +
+    `curl "${BASE}/restaurants/nino/reservations" \\\n` +
     `  -H "X-API-Key: ${DPKEY}" \\\n` +
     `  -H "X-End-User-Id: john@nino.com"`;
   io.step("Prove the proxy reaches your machine",
@@ -444,7 +444,7 @@ export async function runLab(io, opts = {}) {
     "it's a real, runnable request.");
   await io.pause(P.runStep, smokeCurl);
   {
-    const r = await httpOk(`${BASE}/v1/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
+    const r = await httpOk(`${BASE}/restaurants/nino/reservations`, { "X-API-Key": DPKEY, "X-End-User-Id": "john@nino.com" });
     const d = await r.json();
     io.print(green(`  ✓ ${d.data.length} reservations returned:`));
     io.reservations(reservationRows(d.data));
@@ -453,7 +453,7 @@ export async function runLab(io, opts = {}) {
   // One keyless call too — a DENIED sample. The gateway captures all of this
   // dev-environment traffic, so the authorization agent later reasons from
   // real allowed AND denied requests.
-  await fetch(`${BASE}/v1/restaurants/nino/reservations`).catch(() => {});
+  await fetch(`${BASE}/restaurants/nino/reservations`).catch(() => {});
   io.print(dim("  (these dev calls double as the sample traffic the AI agents learn from)"));
 
   // 6 · widget key
@@ -579,7 +579,7 @@ export async function runLab(io, opts = {}) {
   // 12 · BEFORE — John opens MARIA'S reservation by id. The lab first finds
   // one of Maria's seeded reservations (as Maria, so this fetch works before
   // AND after the rules land).
-  const listUrl = `${BASE}/v1/restaurants/nino/reservations`;
+  const listUrl = `${BASE}/restaurants/nino/reservations`;
   if (!state.mariaResi) {
     const lr = await fetch(listUrl, { headers: { "X-API-Key": DPKEY, "X-End-User-Id": "maria@nino.com" } });
     const ld = await lr.json().catch(() => null);
@@ -588,7 +588,7 @@ export async function runLab(io, opts = {}) {
   }
   const MARIA_RESI = state.mariaResi;
   const curlOne = (who, id) =>
-    `curl "${BASE}/v1/restaurants/nino/reservations/${id}" \\\n` +
+    `curl "${BASE}/restaurants/nino/reservations/${id}" \\\n` +
     `  -H "X-API-Key: ${DPKEY}" \\\n` +
     `  -H "X-End-User-Id: ${who}"`;
 
@@ -735,11 +735,11 @@ export async function runLab(io, opts = {}) {
       io.print((ok ? green : yellow)(`  ${n}. ${label} — ${detail}${ok ? " ✓" : ""}`));
     // Every beat shows its exact curl — copy-paste-able, nothing hidden.
     const curlGet = (who, id) =>
-      `curl "${BASE}/v1/restaurants/nino/reservations/${id}" -H "X-API-Key: ${DPKEY}" -H "X-End-User-Id: ${who}"`;
+      `curl "${BASE}/restaurants/nino/reservations/${id}" -H "X-API-Key: ${DPKEY}" -H "X-End-User-Id: ${who}"`;
     const showCurl = (c2) => io.print(dim("     $ " + c2));
 
     // 1 · John books
-    showCurl(`curl -X POST "${BASE}/v1/restaurants/nino/reservations" -H "X-API-Key: ${DPKEY}" -H "X-End-User-Id: john@nino.com" -H "Content-Type: application/json" -d '{"diner_name":"John Diner","diner_external_id":"john@nino.com","party_size":2,"starts_at":"…"}'`);
+    showCurl(`curl -X POST "${BASE}/restaurants/nino/reservations" -H "X-API-Key: ${DPKEY}" -H "X-End-User-Id: john@nino.com" -H "Content-Type: application/json" -d '{"diner_name":"John Diner","diner_external_id":"john@nino.com","party_size":2,"starts_at":"…"}'`);
     const br = await fetch(listUrl, { method: "POST", headers: H("john@nino.com"),
       body: JSON.stringify({ diner_name: "John Diner", diner_external_id: "john@nino.com",
         party_size: 2, starts_at: new Date(Date.now() + 86400000).toISOString() }) });

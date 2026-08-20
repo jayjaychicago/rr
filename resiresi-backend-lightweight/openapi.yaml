@@ -2,10 +2,26 @@ openapi: 3.1.0
 info:
   title: ResiResi Restaurant Reservation API
   version: 1.0.0
-  description: 'Backend reservation API for the ResiResi platform. Used as the APIblaze proxy reference
-    origin.
+  description: 'Backend reservation API for the ResiResi platform. Used as the APIblaze
+    proxy reference origin.
 
-    This origin is open: it requires no credentials of its own.
+
+    This origin is open: it requires no credentials of its own. Access control is the
+    gateway''s job — which is what it exists to demonstrate.
+
+
+    HOSTED AT backend.resiresi.com THIS IS A SANDBOX. Everything you write there is
+    private to your IP address and is deleted every week, Monday 00:00 UTC. It is a
+    place to try things, not a place to keep them. Per sandbox: 200 reservations, 50
+    tables, 25 restaurants, 256 KB total, 16 KB per request body, 2000 requests a day.
+    GET /whoami reports which sandbox you are in and when it expires; POST
+    /sandbox/reset starts you over. (Those two are sandbox-only operations and are
+    deliberately not part of this contract, so a local copy of this spec stays exactly
+    as true as the hosted one.)
+
+
+    Running it yourself instead? git clone https://github.com/jayjaychicago/rr && cd
+    rr/resiresi-backend-lightweight && node server.js — no limits, no wipe.
 
     '
 servers:
@@ -21,7 +37,7 @@ servers:
 # tunnels to it, and nothing needs to be exposed.
 - url: https://backend.resiresi.com
   description: 'Public sandbox: your data is private to your IP address and is
-    deleted every Monday 00:00 UTC. Real writes, no key needed. GET /v1/whoami
+    deleted every Monday 00:00 UTC. Real writes, no key needed. GET /whoami
     shows which sandbox you are in.'
 components:
   schemas:
@@ -294,7 +310,7 @@ paths:
       responses:
         '200':
           description: HTML page
-  /v1/restaurants:
+  /restaurants:
     get:
       operationId: listRestaurants
       summary: List restaurants
@@ -357,7 +373,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /v1/restaurants/{restaurantId}:
+  /restaurants/{restaurantId}:
     parameters:
     - name: restaurantId
       in: path
@@ -428,7 +444,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /v1/restaurants/{restaurantId}/tables:
+  /restaurants/{restaurantId}/tables:
     parameters:
     - name: restaurantId
       in: path
@@ -492,7 +508,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /v1/restaurants/{restaurantId}/tables/{tableId}:
+  /restaurants/{restaurantId}/tables/{tableId}:
     parameters:
     - name: restaurantId
       in: path
@@ -566,7 +582,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /v1/restaurants/{restaurantId}/reservations:
+  /restaurants/{restaurantId}/reservations:
     parameters:
     - name: restaurantId
       in: path
@@ -717,7 +733,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /v1/restaurants/{restaurantId}/reservations/{reservationId}:
+  /restaurants/{restaurantId}/reservations/{reservationId}:
     parameters:
     - name: restaurantId
       in: path

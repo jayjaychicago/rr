@@ -66,7 +66,7 @@ export function createApp() {
   }));
 
   app.use(systemRouter);
-  app.use('/v1/profile', profileRouter);
+  app.use('/profile', profileRouter);
 
   app.use((req, res) => {
     res.status(404).json({

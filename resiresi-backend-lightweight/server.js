@@ -136,9 +136,9 @@ const server = createServer(async (req, res) => {
         health: "/healthz",
         spec: "/openapi.yaml",
         docs: "/docs",
-        restaurants: "/v1/restaurants",
-        reservations: "/v1/restaurants/{restaurant}/reservations",
-        reservation: "/v1/restaurants/{restaurant}/reservations/{id}",
+        restaurants: "/restaurants",
+        reservations: "/restaurants/{restaurant}/reservations",
+        reservation: "/restaurants/{restaurant}/reservations/{id}",
       },
     });
   }
@@ -154,30 +154,59 @@ const server = createServer(async (req, res) => {
 <script>SwaggerUIBundle({url:'/openapi.yaml',dom_id:'#ui'})</script>`, { "Content-Type": "text/html" });
   }
 
-  // /v1/restaurants...
-  const parts = path.split("/").filter(Boolean); // ["v1","restaurants",...]
-  if (parts[0] !== "v1" || parts[1] !== "restaurants") return notFound(res, "Route");
+  // /restaurants...  (the API is unversioned — no /v1 prefix)
+  const parts = path.split("/").filter(Boolean); // ["restaurants",...]
+  if (parts[0] !== "restaurants") return notFound(res, "Route");
 
-  // GET /v1/restaurants
-  if (parts.length === 2) {
-    if (m !== "GET") return err(res, 405, "method_not_allowed", "Method not allowed.");
-    return ok(res, { data: db.restaurants });
+  // GET /restaurants · POST /restaurants
+  if (parts.length === 1) {
+    if (m === "GET") return ok(res, { data: db.restaurants });
+    if (m === "POST") {
+      const b = await readBody(req);
+      if (!b.slug || !/^[a-z0-9-]+$/.test(b.slug)) {
+        return err(res, 400, "invalid", "slug is required and may contain only lowercase letters, digits and hyphens.");
+      }
+      if (!b.name) return err(res, 400, "invalid", "name is required.");
+      if (findRestaurant(b.slug)) {
+        return err(res, 409, "slug_taken", `A restaurant with the slug ${b.slug} already exists.`);
+      }
+      const now = new Date().toISOString();
+      const row = {
+        id: randomUUID(), slug: b.slug, name: b.name,
+        timezone: b.timezone || "America/Detroit", open_hours: b.open_hours || [],
+        address: b.address || null, phone: b.phone || null,
+        created_at: now, updated_at: now,
+      };
+      db.restaurants.push(row);
+      return created(res, row);
+    }
+    return err(res, 405, "method_not_allowed", "Method not allowed.");
   }
 
-  const restaurant = findRestaurant(parts[2]);
-  // GET /v1/restaurants/:idOrSlug
-  if (parts.length === 3) {
+  const restaurant = findRestaurant(parts[1]);
+  // GET /restaurants/:idOrSlug · PATCH /restaurants/:idOrSlug
+  if (parts.length === 2) {
     if (!restaurant) return notFound(res, "Restaurant");
-    if (m !== "GET") return err(res, 405, "method_not_allowed", "Method not allowed.");
-    return ok(res, restaurant);
+    if (m === "GET") return ok(res, restaurant);
+    if (m === "PATCH") {
+      const b = await readBody(req);
+      // slug is deliberately not updatable — it is the handle callers address
+      // the restaurant by, and the contract's update body leaves it out.
+      for (const field of ["name", "timezone", "open_hours", "address", "phone"]) {
+        if (field in b) restaurant[field] = b[field];
+      }
+      restaurant.updated_at = new Date().toISOString();
+      return ok(res, restaurant);
+    }
+    return err(res, 405, "method_not_allowed", "Method not allowed.");
   }
   if (!restaurant) return notFound(res, "Restaurant");
   const rid = restaurant.id;
-  const sub = parts[3];
+  const sub = parts[2];
 
   // ── tables ──
   if (sub === "tables") {
-    if (parts.length === 4) {
+    if (parts.length === 3) {
       if (m === "GET") return ok(res, { data: db.tables.filter((t) => t.restaurant_id === rid) });
       if (m === "POST") {
         const b = await readBody(req);
@@ -186,7 +215,7 @@ const server = createServer(async (req, res) => {
         db.tables.push(row); return created(res, row);
       }
     }
-    const table = db.tables.find((t) => t.id === parts[4] && t.restaurant_id === rid);
+    const table = db.tables.find((t) => t.id === parts[3] && t.restaurant_id === rid);
     if (!table) return notFound(res, "Table");
     if (m === "PATCH") { Object.assign(table, await readBody(req)); return ok(res, table); }
     if (m === "DELETE") { db.tables = db.tables.filter((t) => t !== table); res.writeHead(204).end(); return; }
@@ -196,7 +225,7 @@ const server = createServer(async (req, res) => {
   // ── reservations ──
   if (sub === "reservations") {
     // GET list
-    if (parts.length === 4 && m === "GET") {
+    if (parts.length === 3 && m === "GET") {
       let rows = db.reservations.filter((r) => r.restaurant_id === rid);
       if (q.get("from")) rows = rows.filter((r) => r.starts_at >= q.get("from"));
       if (q.get("to")) rows = rows.filter((r) => r.starts_at <= q.get("to"));
@@ -220,7 +249,7 @@ const server = createServer(async (req, res) => {
       return ok(res, { data: rows, page: { next_cursor: next, limit } });
     }
     // POST create
-    if (parts.length === 4 && m === "POST") {
+    if (parts.length === 3 && m === "POST") {
       const b = await readBody(req);
       const idem = req.headers["idempotency-key"] || null;
       if (idem) {
@@ -251,7 +280,7 @@ const server = createServer(async (req, res) => {
       return created(res, row);
     }
     // single
-    const r = db.reservations.find((x) => x.id === parts[4] && x.restaurant_id === rid);
+    const r = db.reservations.find((x) => x.id === parts[3] && x.restaurant_id === rid);
     if (!r) return notFound(res, "Reservation");
     if (m === "GET") return ok(res, r);
     if (m === "PATCH") { Object.assign(r, await readBody(req), { updated_at: new Date().toISOString() }); return ok(res, r); }

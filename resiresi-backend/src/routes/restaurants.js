@@ -21,7 +21,7 @@ const CreateRestaurantSchema = z.object({
 
 const UpdateRestaurantSchema = CreateRestaurantSchema.partial().omit({ slug: true });
 
-// GET /v1/restaurants
+// GET /restaurants
 router.get('/', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
@@ -33,7 +33,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// GET /v1/restaurants/:idOrSlug
+// GET /restaurants/:idOrSlug
 router.get('/:idOrSlug', async (req, res, next) => {
   try {
     const { idOrSlug } = req.params;
@@ -48,7 +48,7 @@ router.get('/:idOrSlug', async (req, res, next) => {
   }
 });
 
-// POST /v1/restaurants
+// POST /restaurants
 router.post('/',
   validate(CreateRestaurantSchema),
   async (req, res, next) => {
@@ -71,7 +71,7 @@ router.post('/',
   }
 );
 
-// PATCH /v1/restaurants/:restaurantId
+// PATCH /restaurants/:restaurantId
 router.patch('/:restaurantId',
   validate(UpdateRestaurantSchema),
   async (req, res, next) => {

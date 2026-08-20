@@ -78,7 +78,7 @@ open https://backend.resiresi.com/docs
 ```bash
 RESTAURANT_ID="nino"   # slug or UUID — both work
 
-curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reservations" \
+curl -X POST "https://backend.resiresi.com/restaurants/${RESTAURANT_ID}/reservations" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: test-idem-$(date +%s)" \
   -d '{
@@ -96,7 +96,7 @@ curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reser
 ### 4. List reservations with filters
 
 ```bash
-curl "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reservations?status=confirmed&limit=10"
+curl "https://backend.resiresi.com/restaurants/${RESTAURANT_ID}/reservations?status=confirmed&limit=10"
 # → {"data":[...],"page":{"next_cursor":null,"limit":10}}
 ```
 
@@ -107,7 +107,7 @@ TABLE_ID="<uuid of any table>"
 STARTS="2026-05-02T20:00:00-05:00"
 
 # First booking
-curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reservations" \
+curl -X POST "https://backend.resiresi.com/restaurants/${RESTAURANT_ID}/reservations" \
   -H "Content-Type: application/json" \
   -d "{
     \"diner_name\": \"Alice\",
@@ -119,7 +119,7 @@ curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reser
 # → 201
 
 # Second booking on the same table overlapping
-curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reservations" \
+curl -X POST "https://backend.resiresi.com/restaurants/${RESTAURANT_ID}/reservations" \
   -H "Content-Type: application/json" \
   -d "{
     \"diner_name\": \"Bob\",
@@ -135,6 +135,6 @@ curl -X POST "https://backend.resiresi.com/v1/restaurants/${RESTAURANT_ID}/reser
 
 ```bash
 # No key, no header — the API is open.
-curl "https://backend.resiresi.com/v1/restaurants"
+curl "https://backend.resiresi.com/restaurants"
 # → {"data":[...]}
 ```

@@ -1,7 +1,7 @@
 import type { ApiBlazeConfig } from "./apiblaze";
 
 // Resiresi (shared reservation backend)
-const ORIGINAL_BASE = `${process.env.RESIRESI_API_URL ?? "http://localhost:8080"}/v1`;
+const ORIGINAL_BASE = `${process.env.RESIRESI_API_URL ?? "http://localhost:8080"}`;
 // Optional: an APIblaze DP key. Set when RESIRESI_API_URL points at the proxy —
 // the key says which APP is calling; X-End-User-Id (below) says which PERSON.
 const ENV_API_KEY = process.env.RESIRESI_API_KEY;

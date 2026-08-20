@@ -51,7 +51,7 @@ const ListQuerySchema = z.object({
   cursor: z.string().optional(),
 });
 
-// POST /v1/restaurants/:restaurantId/reservations
+// POST /restaurants/:restaurantId/reservations
 router.post('/',
   validate(CreateReservationSchema),
   async (req, res, next) => {
@@ -130,7 +130,7 @@ router.post('/',
   }
 );
 
-// GET /v1/restaurants/:restaurantId/reservations
+// GET /restaurants/:restaurantId/reservations
 router.get('/',
   validateQuery(ListQuerySchema),
   async (req, res, next) => {
@@ -190,7 +190,7 @@ router.get('/',
   }
 );
 
-// GET /v1/restaurants/:restaurantId/reservations/:reservationId
+// GET /restaurants/:restaurantId/reservations/:reservationId
 router.get('/:reservationId',
   async (req, res, next) => {
     try {
@@ -208,7 +208,7 @@ router.get('/:reservationId',
   }
 );
 
-// PATCH /v1/restaurants/:restaurantId/reservations/:reservationId
+// PATCH /restaurants/:restaurantId/reservations/:reservationId
 router.patch('/:reservationId',
   validate(UpdateReservationSchema),
   async (req, res, next) => {
@@ -260,7 +260,7 @@ router.patch('/:reservationId',
   }
 );
 
-// DELETE /v1/restaurants/:restaurantId/reservations/:reservationId (soft cancel)
+// DELETE /restaurants/:restaurantId/reservations/:reservationId (soft cancel)
 router.delete('/:reservationId',
   async (req, res, next) => {
     try {
