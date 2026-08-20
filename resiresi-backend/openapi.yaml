@@ -9,7 +9,7 @@ info:
 
     '
 servers:
-- url: https://backend.resiresi.com/v1
+- url: https://backend.resiresi.com
   description: ResiResiBackend
 components:
   schemas:
