@@ -19,8 +19,8 @@ servers:
 #     is an Elastic IP, and this file would then be pointing at someone else.
 # Running the guided lab instead? Use http://localhost:8080 — `apiblaze dev`
 # tunnels to it, and nothing needs to be exposed.
-- url: http://54.198.198.29:8080
-  description: Study box (public, no tunnel needed)
+- url: https://backend.resiresi.com
+  description: Resiresibackend
 components:
   schemas:
     Error:
