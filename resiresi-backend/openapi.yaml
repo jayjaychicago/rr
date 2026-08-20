@@ -10,7 +10,9 @@ info:
     '
 servers:
 - url: https://backend.resiresi.com
-  description: ResiResiBackend
+  description: 'Public sandbox: your data is private to your IP address and is
+    deleted every Monday 00:00 UTC. Real writes, no key needed. GET /v1/whoami
+    shows which sandbox you are in.'
 components:
   schemas:
     Error:

@@ -1,5 +1,15 @@
 # ResiResi Backend — Deployment Guide
 
+> **Out of date as written.** The Fly.io app this describes was deleted on
+> 2026-08-20, and `backend.resiresi.com` now serves the per-IP, weekly-wiped
+> sandbox in the private `resiresionline` repo (Cloudflare Workers + Durable
+> Objects), not this Postgres backend.
+>
+> These steps still work for standing this backend up **on a hostname of your
+> own** — just do not point them at `backend.resiresi.com`, which is taken.
+> For a local copy with no deployment at all, use
+> `rr/resiresi-backend-lightweight` (`node server.js`, no Docker, no Postgres).
+
 ## One-time Fly.io setup
 
 ```bash
