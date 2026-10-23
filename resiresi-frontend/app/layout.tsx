@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Script from "next/script";
 import "./globals.css";
 import { getTenantSlug } from "@/lib/tenant";
 import { getUser } from "@/lib/user";
 import { signOut, signOutUser } from "./actions";
+
+/** Google Analytics 4 — the resiresi.com property. */
+const GA_ID = "G-SM169QH0Z7";
 
 export const metadata: Metadata = {
   title: { default: "ResiResi", template: "%s | ResiResi" },
@@ -20,6 +24,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="flex min-h-screen flex-col">
+        <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
+        <Script id="ga" strategy="afterInteractive">
+          {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${GA_ID}');`}
+        </Script>
         <header className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
             <div className="flex items-center gap-6">
